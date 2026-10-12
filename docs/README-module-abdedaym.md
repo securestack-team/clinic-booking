@@ -30,7 +30,7 @@ savoir ce qu'il reste à faire.
 |---|---|---|
 | Démo de détection : répétition complète sur GitHub | **Fait** : bloqué → rouge → vert | [PR #5](https://github.com/securestack-team/clinic-booking/pull/5) (fermée sans merge) |
 | Guide et script pour la démo en direct | Fait, script testé sur un dépôt local | `docs/demo/` |
-| Captures d'écran | **À faire à la main** | `docs/captures/README.md` donne la liste |
+| Captures d'écran | 3 faites sur 7 (les trois runs de la répétition) ; **4 à faire à la main** | `docs/captures/` |
 | Remédiation v1 : mise à jour d'un paquet vulnérable (NuGet, npm) | Fait, testé | `security/remediation/` |
 | Branche `autofix/<id>` → commit → PR avec le label `ai-autofix` | Fait ; Git testé pour de vrai, API GitHub simulée | `cli.py`, `gitops.py`, `github.py` |
 | Garde-fous (pas de merge, max de PR, dossiers interdits…) | Fait, chacun a son test | `guardrails.py` |
@@ -471,7 +471,7 @@ Comment ils fonctionnent :
 | Ouvrir la PR, vérifier la pipeline rouge et l'alerte Security | Oui | Runs et alertes de la section 3 |
 | Capturer le blocage par la push protection | Sortie du terminal gardée ; capture d'écran à faire | `docs/demo/README.md` |
 | Corriger dans la même PR → pipeline verte | Oui | Run 38322924524 |
-| Captures d'écran de chaque étape | **Non** | Liste dans `docs/captures/README.md` |
+| Captures d'écran de chaque étape | En partie : 3 sur 7 | `docs/captures/` ; les 4 autres demandent d'être connecté ou de rejouer la démo |
 
 ### AGENTS.md (remédiation)
 
@@ -518,7 +518,7 @@ gère déjà (il le prend en priorité), mais le secret doit être créé par Al
 
 | # | Tâche | Qui | Bloque quoi |
 |---|---|---|---|
-| 1 | Faire les captures d'écran de la démo | Abdedaym | Le plan B de mercredi, le rapport |
+| 1 | Faire les 4 captures restantes : push bloqué, PR rouge, alerte Security, diff de la correction | Abdedaym | Le plan B de mercredi, le rapport |
 | 2 | Faire approuver les Pull Requests #8, #9 puis #10 | 1 relecteur de l'équipe | Tout le reste |
 | 3 | Relire et comprendre le code de la remédiation | Abdedaym | La soutenance |
 | 4 | Répéter la démo mercredi matin avec `faille.sh` | Abdedaym + Ali | La démo en direct |
@@ -527,6 +527,7 @@ gère déjà (il le prend en priorité), mais le secret doit être créé par Al
 | 6 bis | Créer la clé Gemini et le secret `GEMINI_API_KEY` | Mohammed + Ali | La v2 (et le triage LLM de l'agent) |
 | 7 | Ajouter le job `auto-remediation` dans `security.yml` | Ali cette semaine, puis Hajar | La remédiation ne tourne pas |
 | 8 | Limiter Gitleaks à l'historique de la PR (`--log-opts`) ou accepter le comportement actuel | Hajar | Une branche avec un secret met toutes les PR au rouge |
+| 8 bis | Vérifier la pipeline après le 19 octobre : GitHub annonce dans chaque run que `ubuntu-latest` passe à Ubuntu 26 à cette date | Hajar | Un job pourrait changer de comportement |
 | 9 | Squelette de l'API, puis authentification et endpoints | Freddy | Tests de sécurité, démo `FromSqlRaw` |
 | 10 | Écrire les tests de sécurité xUnit | Abdedaym + Freddy | Pratique Tier 1 « Automated Security Testing » |
 | 11 | Essayer la v2 avec le vrai LLM sur de vraies failles, ajuster le prompt | Abdedaym | A besoin du code de l'API et de la clé Gemini |
