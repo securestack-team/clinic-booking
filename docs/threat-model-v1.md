@@ -87,6 +87,9 @@ flowchart LR
     acr -->|"F14 image"| api
 ```
 
+Le même diagramme en image, pour les slides ou si l'aperçu ci-dessus ne s'affiche pas :
+[`threat-model-v1-dfd.png`](threat-model-v1-dfd.png).
+
 ## 4. Flux de données
 
 | Flux | De → vers | Données | Protection prévue |
