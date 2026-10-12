@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": { "name": "CodeQL", "semanticVersion": "2.23.1" },
+        "extensions": [
+          {
+            "name": "codeql/csharp-queries",
+            "rules": [
+              {
+                "id": "cs/sql-injection",
+                "name": "cs/sql-injection",
+                "shortDescription": { "text": "SQL query built from user-controlled sources" },
+                "defaultConfiguration": { "enabled": true, "level": "error" },
+                "properties": {
+                  "tags": ["security", "external/cwe/cwe-089"],
+                  "precision": "high",
+                  "problem.severity": "error",
+                  "security-severity": "8.8"
+                }
+              },
+              {
+                "id": "cs/hardcoded-credentials",
+                "name": "cs/hardcoded-credentials",
+                "shortDescription": { "text": "Hard-coded credentials" },
+                "defaultConfiguration": { "enabled": true, "level": "error" },
+                "properties": {
+                  "tags": ["security", "external/cwe/cwe-259", "external/cwe/cwe-321", "external/cwe/cwe-798"],
+                  "precision": "high",
+                  "problem.severity": "error",
+                  "security-severity": "9.8"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "results": [
+        {
+          "ruleId": "cs/sql-injection",
+          "rule": { "id": "cs/sql-injection", "index": 0, "toolComponent": { "index": 0 } },
+          "message": { "text": "This query depends on [this ASP.NET Core query string](1)." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "api/Controllers/AppointmentsController.cs", "uriBaseId": "%SRCROOT%", "index": 0 },
+                "region": { "startLine": 42, "startColumn": 44, "endColumn": 47 }
+              }
+            }
+          ],
+          "partialFingerprints": { "primaryLocationLineHash": "a1b2c3d4:1" }
+        },
+        {
+          "ruleId": "cs/hardcoded-credentials",
+          "rule": { "id": "cs/hardcoded-credentials", "index": 1, "toolComponent": { "index": 0 } },
+          "message": { "text": "The hard-coded value flows to a signing-key parameter." },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "api/Services/TokenService.cs", "uriBaseId": "%SRCROOT%", "index": 1 },
+                "region": { "startLine": 12, "startColumn": 31, "endColumn": 58 }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
