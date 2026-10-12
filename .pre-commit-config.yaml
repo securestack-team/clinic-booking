@@ -1,0 +1,8 @@
+# Shift-left : Gitleaks bloque un commit contenant un secret, avant même le push.
+# Installation (une fois) :  pip install pre-commit   (ou brew install pre-commit)
+#                            pre-commit install
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks

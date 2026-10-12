@@ -1,0 +1,51 @@
+# Intégration continue : build + tests sur chaque Pull Request et chaque push vers main.
+# Les jobs d'un langage ne s'exécutent que si son code existe déjà dans le repo.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect:
+    name: Detect projects
+    runs-on: ubuntu-latest
+    outputs:
+      dotnet: ${{ steps.p.outputs.dotnet }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: p
+        run: echo "dotnet=$([ -n "$(git ls-files 'api/*.sln' 'api/*.slnx' 'api/**/*.csproj')" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  dotnet:
+    name: Build & Test (.NET)
+    needs: detect
+    if: needs.detect.outputs.dotnet == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet restore
+      - run: dotnet build --no-restore --configuration Release
+      - run: dotnet test --no-build --configuration Release --verbosity normal
+      - name: Dépendances NuGet vulnérables
+        run: |
+          dotnet list package --vulnerable --include-transitive | tee vulnerable.txt
+          if grep -qE '\b(High|Critical)\b' vulnerable.txt; then
+            echo "::error::Paquet NuGet vulnérable (High/Critical) détecté"
+            exit 1
+          fi
