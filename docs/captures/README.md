@@ -4,19 +4,19 @@ Preuves à garder au fil de l'eau. Une capture = un fichier PNG dans ce dossier.
 
 ## Démo de détection (secret en dur)
 
-| Fichier | Ce qu'on doit voir | Où le trouver |
+| Fichier | Ce qu'on doit voir | État |
 |---|---|---|
-| `demo-01-push-bloque.png` | Le terminal avec `GITHUB PUSH PROTECTION` | Terminal, pendant `faille.sh bloque` |
-| `demo-02-pipeline-rouge.png` | La PR avec Gitleaks et Trivy en rouge, merge bloqué | Page de la PR, après `faille.sh rouge` |
-| `demo-03-run-rouge.png` | Le détail du run en échec | [run 38322342740](https://github.com/securestack-team/clinic-booking/actions/runs/38322342740) |
-| `demo-04-alerte-security.png` | L'alerte sur `api/appsettings.json`, ligne 4 | Security → Code scanning (filtre `is:closed` après la correction) |
-| `demo-05-gitleaks-historique.png` | Trivy vert mais Gitleaks rouge après une simple suppression | [run 38322821765](https://github.com/securestack-team/clinic-booking/actions/runs/38322821765) |
-| `demo-06-correction.png` | Le diff de la correction : plus de clé dans le fichier | Onglet « Files changed » de la PR |
-| `demo-07-pipeline-verte.png` | Tous les checks verts | [run 38322924524](https://github.com/securestack-team/clinic-booking/actions/runs/38322924524) |
+| `demo-01-push-bloque.png` | Le terminal avec `GITHUB PUSH PROTECTION` | **À faire** pendant `faille.sh bloque` |
+| `demo-02-pipeline-rouge.png` | La PR avec Gitleaks et Trivy en rouge, merge bloqué | **À faire** après `faille.sh rouge` |
+| [`demo-03-run-rouge.png`](demo-03-run-rouge.png) | Le run en échec : Gitleaks et Trivy rouges, 52 s | Fait ([run 38322342740](https://github.com/securestack-team/clinic-booking/actions/runs/38322342740)) |
+| `demo-04-alerte-security.png` | L'alerte sur `api/appsettings.json`, ligne 4 | **À faire** : Security → Code scanning (il faut être connecté ; filtre `is:closed` après la correction) |
+| [`demo-05-gitleaks-historique.png`](demo-05-gitleaks-historique.png) | Trivy vert mais Gitleaks rouge après une simple suppression | Fait ([run 38322821765](https://github.com/securestack-team/clinic-booking/actions/runs/38322821765)) |
+| `demo-06-correction.png` | Le diff de la correction : plus de clé dans le fichier | **À faire** : onglet « Files changed » de la PR |
+| [`demo-07-pipeline-verte.png`](demo-07-pipeline-verte.png) | Tous les jobs verts, 59 s | Fait ([run 38322924524](https://github.com/securestack-team/clinic-booking/actions/runs/38322924524)) |
 
-Les captures 03, 05 et 07 peuvent être faites à tout moment à partir des liens de la
-répétition. Les captures 01, 02, 04 et 06 se font pendant une démo : l'état rouge de la PR
-disparaît après la correction.
+Les captures 03, 05 et 07 viennent de la répétition du 12 octobre (PR #5), prises sur les pages
+publiques des runs. Les quatre autres demandent d'être connecté à GitHub ou de rejouer la
+démo : l'état rouge de la PR disparaît après la correction.
 
 ## Remédiation automatique (plus tard)
 
