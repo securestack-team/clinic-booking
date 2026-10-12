@@ -5,7 +5,7 @@ Ce document explique en détail le travail réalisé pour le module d'**Abdedaym
 sécurité, branche `vulnerable-demo`). Il sert à comprendre le code, à le présenter, et à
 savoir ce qu'il reste à faire.
 
-> État au 12 octobre 2026.
+> État au 13 octobre 2026.
 
 ## Sommaire
 
@@ -34,23 +34,25 @@ savoir ce qu'il reste à faire.
 | Remédiation v1 : mise à jour d'un paquet vulnérable (NuGet, npm) | Fait, testé | `security/remediation/` |
 | Branche `autofix/<id>` → commit → PR avec le label `ai-autofix` | Fait ; Git testé pour de vrai, API GitHub simulée | `cli.py`, `gitops.py`, `github.py` |
 | Garde-fous (pas de merge, max de PR, dossiers interdits…) | Fait, chacun a son test | `guardrails.py` |
+| Remédiation v2 : patch de code proposé par un LLM, contrôlé puis compilé | Fait, testé avec un LLM simulé | `codefix.py`, `llm.py` |
 | Job dans la pipeline | **Pas fait** (module CI/CD) | Job prêt dans `security/remediation/README.md` |
-| Remédiation v2 : patch proposé par LLM | **Pas fait** | Section 10 |
 | Tests de sécurité xUnit (403, 401, 429, 400) | **Bloqué** : pas encore d'API | Section 5 |
 | Branche `vulnerable-demo` | **Bloqué** : prévue en semaine 7 | Section 6 |
 
-En chiffres : 11 fichiers Python pour la remédiation (environ 1 160 lignes), 46 tests
-automatiques, 3 runs de pipeline pour la répétition de la démo.
+En chiffres : 14 fichiers Python pour la remédiation (environ 1 700 lignes), 65 tests
+automatiques, 3 runs de pipeline pour la répétition de la démo, 4 Pull Requests ouvertes.
 
 ## 2. Où se trouve le travail
 
-| Branche | Commit | Contenu |
+| Branche | Pull Request | Contenu |
 |---|---|---|
-| `docs/demo-detection` | `9b2e8f4` | `docs/demo/README.md`, `docs/demo/faille.sh`, `docs/captures/README.md` |
-| `feature/auto-remediation` | `4c0bc1c` + ce document | Tout le dossier `security/remediation` |
+| `docs/demo-detection` | [#8](https://github.com/securestack-team/clinic-booking/pull/8) | Guide de la démo, script, captures |
+| `feature/auto-remediation` | [#9](https://github.com/securestack-team/clinic-booking/pull/9) | Remédiation v1 (paquets vulnérables) |
+| `feature/auto-remediation-v2` | [#10](https://github.com/securestack-team/clinic-booking/pull/10), empilée sur #9 | Remédiation v2 (patch LLM) + ce document à jour |
 
-Les deux branches partent de `main`. Il faut ouvrir une Pull Request par branche, avec une
-approbation chacune. La branche `demo/faille` de la répétition a été supprimée après usage.
+Les Pull Requests sont ouvertes et leur pipeline est verte. Il leur manque **une approbation**
+chacune. Ordre de merge : #9 avant #10. La branche `demo/faille` de la répétition a été
+supprimée après usage.
 
 Aucun fichier d'un autre module n'a été modifié : ni `.github/workflows`, ni `/api`, ni
 `/infra`, ni `security/agent`.
@@ -67,13 +69,16 @@ security/remediation/
     cli.py                      ligne de commande, enchaîne les étapes
     triage_input.py             lit triage.json, choisit les findings à corriger
     versions.py                 compare les versions, choisit la version corrigée
-    fixers.py                   planifie, applique et vérifie un correctif
+    fixers.py                   v1 : planifie, applique et vérifie une mise à jour de paquet
+    codefix.py                  v2 : prépare l'extrait, contrôle et applique le patch du LLM
+    llm.py                      v2 : demande du patch à Gemini
+    redact.py                   v2 : masque les secrets avant l'envoi au LLM
     guardrails.py               toutes les règles de sécurité
     gitops.py                   branche, commit, push (dans un worktree)
     github.py                   PR, label, commentaire
     report.py                   texte de la PR, synthèse, rapport JSON
     net.py                      petit client HTTP
-  tests/                        46 tests
+  tests/                        65 tests
 ```
 
 ---
@@ -188,8 +193,9 @@ L'entrée est `reports/triage.json`. Pour chaque finding :
 | Finding | Décision |
 |---|---|
 | Catégorie `dependency`, fichier `packages.lock.json`, `Directory.Packages.props` ou `package-lock.json` | **Candidat** |
-| Catégorie `secret` | Écarté : « un secret ne se corrige pas par une PR, il faut le révoquer » |
-| Catégorie `code` ou `config` | Écarté : prévu en v2 |
+| Injection SQL, autorisation manquante ou secret en dur, dans un fichier `.cs` de `api/` | **Candidat pour la v2** (si la clé du LLM existe), voir 4.9 |
+| Secret trouvé par Gitleaks ou Trivy | Écarté : « un secret ne se corrige pas par une PR, il faut le révoquer » |
+| Autre finding de code, ou de configuration | Écarté : cas non géré |
 | Autre type de fichier (`requirements.txt`, `go.mod`…) | Écarté : non géré en v1 |
 | Pas de version corrigée | Écarté : rien à proposer |
 | Fichier dans `.github/` ou `infra/` | Écarté : dossier interdit |
@@ -263,11 +269,12 @@ synthèse.
   CVE, le Risk Score, le fichier signalé et une liste de vérifications pour le relecteur.
 - Un **commentaire de synthèse** sur la PR d'origine, mis à jour à chaque exécution. Exemple :
 
-> | Résultat | Paquet | Version | Vulnérabilité(s) | Détail |
-> |---|---|---|---|---|
-> | ✅ PR ouverte | `Newtonsoft.Json` | 12.0.1 → 13.0.1 | CVE-2024-21907 | #12 (branche `autofix/a90dea08ce76`) ⚠️ version majeure |
-> | 💬 Pas de correctif sûr | `System.Text.Encodings.Web` | 4.7.1 → 4.7.2 | CVE-… | dépendance transitive… |
-> | ⏭️ Ignoré | `lodash` | 4.17.20 → 4.17.21 | CVE-2021-23337 | limite de 1 PR par exécution atteinte |
+> | Résultat | Correctif | Vulnérabilité(s) | Détail |
+> |---|---|---|---|
+> | ✅ PR ouverte | `Newtonsoft.Json` 12.0.1 → 13.0.1 | CVE-2024-21907 | #12 (branche `autofix/a90dea08ce76`) ⚠️ version majeure |
+> | ✅ PR ouverte | Patch LLM : use a parameterized query, `api/Controllers/AppointmentsController.cs`, ligne 17 | CWE-89 | #13 (branche `autofix/c0de00000001`) |
+> | 💬 Pas de correctif sûr | Patch LLM : add missing authorization, `api/Controllers/AppointmentsController.cs`, ligne 22 | CWE-862 | le projet ne compile pas avec le patch (dotnet build, code 1, CS0246) |
+> | ⏭️ Ignoré | `lodash` 4.17.20 → 4.17.21 | CVE-2021-23337 | limite de 3 PR par exécution atteinte |
 
 Le résultat complet est aussi écrit dans `reports/remediation.json`.
 
@@ -307,16 +314,62 @@ shell.
 | Pas de `--force` au push | Ne jamais écraser le travail de quelqu'un |
 | La remédiation valide elle-même son entrée | Elle ne dépend pas du code de l'agent, seulement du format de `triage.json` |
 
-### 4.9 Lien avec l'agent IA
+### 4.9 La v2 : un patch de code proposé par un LLM
+
+La v1 est déterministe : elle change un numéro de version. La v2 traite trois cas où il faut
+modifier du **code C#** dans `api/` :
+
+| Cas | CWE | Correction demandée au LLM |
+|---|---|---|
+| Injection SQL | CWE-89 | Remplacer la requête concaténée par une requête paramétrée |
+| Autorisation manquante | CWE-862, CWE-285, CWE-306 | Ajouter `[Authorize]` sur l'endpoint |
+| Secret en dur | CWE-798, CWE-259, CWE-321 | Lire la valeur depuis la configuration |
+
+Elle ne s'active que si la clé `GEMINI_API_KEY` existe. Sinon, seule la v1 tourne.
+
+**Ce qui est envoyé au LLM** (`codefix.build_prompt`) : le nom du fichier, la CWE, la ligne, la
+correction demandée, les `using` du fichier, et 12 lignes avant et après la ligne signalée,
+numérotées. Tout passe par le masquage des secrets. Pour un secret en dur, **toutes les chaînes
+de caractères de l'extrait sont effacées** : la valeur ne quitte jamais la pipeline.
+
+**Ce que le LLM renvoie** : un seul remplacement de lignes, en JSON
+(`start_line`, `end_line`, `replacement`, `explanation`).
+
+**Le principe : le LLM propose, la remédiation contrôle.** Un patch ne devient une PR que s'il
+passe les quatre contrôles. Sinon : pas de PR, un commentaire avec la raison.
+
+| # | Contrôle | Ce qui est refusé |
+|---|---|---|
+| 1 | Forme | Réponse qui n'est pas le JSON attendu ; patch hors de l'extrait, qui ne couvre pas la ligne signalée, ou de plus de 12 lignes |
+| 2 | Contenu | `[MASQUÉ]` recopié, valeur qui ressemble à un secret, patch qui ne change rien. Puis un contrôle par cas : SQL encore concaténé, `[Authorize]` absent ou `[AllowAnonymous]` ajouté, valeur en dur gardée |
+| 3 | Périmètre | Tout fichier modifié autre que celui du finding |
+| 4 | Compilation | `dotnet build` en échec sur le projet |
+
+La PR ouverte porte un avertissement visible : « ce patch a été écrit par un LLM, à relire
+ligne par ligne ». Pour un secret en dur, elle rappelle que le secret reste dans l'historique
+et doit être révoqué.
+
+**Limites à connaître :**
+
+- Les contrôles réduisent le risque, ils ne prouvent pas que le patch est bon. Un LLM
+  manipulé par un commentaire dans le code pourrait proposer un patch qui compile mais fait
+  autre chose. D'où la pipeline complète et la relecture humaine, toujours obligatoires.
+- Le patch ne peut pas ajouter de `using` en haut du fichier. Le LLM doit écrire le nom
+  complet d'un type absent (`[Microsoft.AspNetCore.Authorization.Authorize]`), sinon le patch
+  ne compile pas et il n'y a pas de PR. Ce cas a été rencontré pendant les essais.
+- Les correctifs v1 passent avant les patchs v2, et la limite de PR par exécution est commune.
+
+### 4.10 Lien avec l'agent IA
 
 La remédiation utilise ces champs de `triage.json` :
 
 | Champ | Usage |
 |---|---|
 | `id` | Nom de la branche `autofix/<id>` |
-| `category` | Seul `dependency` est traité en v1 |
+| `category` | `dependency` → v1 ; `code` et `secret` avec une CWE gérée → v2 |
 | `file` | Fichier de dépendances signalé |
 | `package.name`, `installed_version`, `fixed_version`, `advisory` | Quoi mettre à jour, vers quoi, pour quelle CVE |
+| `line`, `cwe` | v2 : où se trouve la faille et de quel type elle est |
 | `risk_score` | Ordre de traitement |
 | `rules`, `recommendation` | Texte du commentaire pour les findings non corrigés |
 
@@ -359,7 +412,7 @@ remédiation dans la pipeline. Rien n'a été fait.
 | Faille volontaire | Outil qui doit la détecter | Correctif attendu |
 |---|---|---|
 | Secret en dur | Gitleaks, Trivy, push protection | Révocation (pas de PR automatique) |
-| `FromSqlRaw` concaténé | CodeQL, Semgrep | Remédiation v2 |
+| `FromSqlRaw` concaténé | CodeQL, Semgrep | **Remédiation v2 : prête, à essayer avec le vrai LLM** |
 | Paquet vulnérable | Trivy | **Remédiation v1 : déjà prête** |
 | Endpoint BOLA | Tests xUnit, ZAP | Correction à la main |
 | Token mobile dans AsyncStorage | MobSF, Semgrep | Correction à la main |
@@ -370,13 +423,14 @@ La démo de détection de cette semaine est la première ligne de ce tableau, d�
 
 ## 7. Les tests de la remédiation
 
-46 tests, lancés avec `python3 -m unittest` depuis `security/remediation`. Ils durent environ
-3 secondes et ne font aucun appel réseau.
+65 tests, lancés avec `python3 -m unittest` depuis `security/remediation`. Ils durent environ
+5 secondes et ne font aucun appel réseau.
 
 | Fichier | Tests | Ce qui est vérifié |
 |---|---|---|
 | `test_units.py` | 28 | Versions, garde-fous, choix des findings, planification, application, vérification |
-| `test_cli.py` | 18 | Exécution complète : simulation, PR NuGet, PR npm, chaque garde-fou, entrées invalides |
+| `test_cli.py` | 18 | Exécution complète de la v1 : simulation, PR NuGet, PR npm, chaque garde-fou, entrées invalides |
+| `test_codefix.py` | 19 | v2 : choix des findings, extrait envoyé et secrets masqués, 15 patchs piégés refusés, compilation en échec, PR ouverte |
 
 Comment ils fonctionnent :
 
@@ -385,6 +439,8 @@ Comment ils fonctionnent :
 - **`dotnet` et `npm` sont simulés** par un faux outil qui fait ce que ferait le vrai sur le
   lockfile. On peut ainsi le faire échouer ou tricher exprès (modifier un workflow).
 - **L'API GitHub est simulée** : les appels sont enregistrés et vérifiés.
+- **Le LLM est simulé** : on lui fait répondre de bons patchs, des patchs piégés, du texte
+  libre ou une panne.
 
 **Vérifications faites en plus :**
 
@@ -392,10 +448,14 @@ Comment ils fonctionnent :
   mis à jour, branche poussée, rien d'autre modifié.
 - Avec le **vrai `dotnet`** (SDK 8, projet `net8.0`) : `Newtonsoft.Json` 12.0.1 → 13.0.1,
   `.csproj` et `packages.lock.json` mis à jour, avec la nouvelle empreinte.
-- **Les tests détectent bien un garde-fou retiré** : six garde-fous ont été désactivés
-  temporairement, un par un (contrôle des fichiers modifiés, vérification du correctif,
-  anti-boucle, limite de PR, validation du nom de paquet, respect d'une PR fermée). À chaque
-  fois, au moins un test a échoué.
+- Avec le **vrai `dotnet build`** (v2, projet ASP.NET temporaire) : un patch `[Authorize]` sans
+  le bon espace de noms ne compile pas (erreur CS0246) et ne donne **pas** de PR ; le même
+  patch avec le nom complet de l'attribut compile et donne une PR d'une seule ligne.
+- **Les tests détectent bien un garde-fou retiré** : onze contrôles ont été désactivés
+  temporairement, un par un (pour la v1 : contrôle des fichiers modifiés, vérification du
+  correctif, anti-boucle, limite de PR, validation du nom de paquet, respect d'une PR fermée ;
+  pour la v2 : contrôle du patch, compilation, contrôle du fichier modifié, effacement des
+  chaînes, masquage de l'extrait). À chaque fois, au moins un test a échoué.
 - Gitleaks et Trivy ne trouvent aucun secret dans les fichiers des deux branches.
 
 ---
@@ -419,7 +479,7 @@ Comment ils fonctionnent :
 |---|---|---|
 | Entrée : `reports/triage.json` | Oui | `triage_input.py` |
 | v1 : mise à jour d'un paquet vulnérable vers la version corrigée | Oui (NuGet, npm) | `fixers.py`, `versions.py` |
-| v2 : patch LLM pour des findings simples | Non | Section 10 |
+| v2 : patch LLM pour des findings simples (SQL concaténé, `[Authorize]` manquant, secret en dur) | Oui, avec un LLM simulé | `codefix.py`, `llm.py` |
 | Branche `autofix/<id>` → commit → PR via l'API GitHub | Oui | `gitops.py`, `github.py` |
 | Label `ai-autofix` | Oui, créé s'il n'existe pas | `github.add_label` |
 | La pipeline se relance | Dépend du token | Section 9 |
@@ -437,6 +497,9 @@ Comment ils fonctionnent :
 | Point | Pourquoi | Comment le vérifier |
 |---|---|---|
 | La création réelle d'une PR par la remédiation | L'API GitHub est simulée dans les tests ; le job n'existe pas | Ajouter le job, ouvrir une PR avec un paquet vulnérable |
+| Une vraie réponse de Gemini pour un patch (v2) | Pas de clé : le LLM est simulé | Créer `GEMINI_API_KEY`, lancer sur un vrai finding |
+| La qualité des patchs du LLM sur le vrai code de l'API | Il n'y a pas encore d'API | Branche `vulnerable-demo`, semaine 7 |
+| Le nom du modèle `gemini-3.8-flash` | Lu dans la documentation Google, pas essayé | Premier appel réel ; sinon `AUTOFIX_LLM_MODEL` |
 | La relance de la pipeline sur la PR du bot | Elle dépend du token utilisé | Voir ci-dessous |
 | `dotnet restore` avec .NET 10 | Vérifié avec le SDK 8 seulement | Premier run du job |
 | Le format réel du message Trivy pour une vulnérabilité NuGet | L'agent s'appuie sur le format documenté | Premier vrai finding |
@@ -456,26 +519,26 @@ gère déjà (il le prend en priorité), mais le secret doit être créé par Al
 | # | Tâche | Qui | Bloque quoi |
 |---|---|---|---|
 | 1 | Faire les captures d'écran de la démo | Abdedaym | Le plan B de mercredi, le rapport |
-| 2 | Ouvrir les 2 Pull Requests et les faire approuver | Abdedaym + 1 relecteur | Tout le reste |
+| 2 | Faire approuver les Pull Requests #8, #9 puis #10 | 1 relecteur de l'équipe | Tout le reste |
 | 3 | Relire et comprendre le code de la remédiation | Abdedaym | La soutenance |
 | 4 | Répéter la démo mercredi matin avec `faille.sh` | Abdedaym + Ali | La démo en direct |
 | 5 | Merger l'agent IA (`feature/ai-security-agent`) | Mohammed | `triage.json` n'existe pas sans lui |
 | 6 | Créer le token du bot et le secret `AUTOFIX_TOKEN` | Ali (propriétaire de l'organisation) | La relance de la pipeline sur les PR du bot |
+| 6 bis | Créer la clé Gemini et le secret `GEMINI_API_KEY` | Mohammed + Ali | La v2 (et le triage LLM de l'agent) |
 | 7 | Ajouter le job `auto-remediation` dans `security.yml` | Ali cette semaine, puis Hajar | La remédiation ne tourne pas |
 | 8 | Limiter Gitleaks à l'historique de la PR (`--log-opts`) ou accepter le comportement actuel | Hajar | Une branche avec un secret met toutes les PR au rouge |
 | 9 | Squelette de l'API, puis authentification et endpoints | Freddy | Tests de sécurité, démo `FromSqlRaw` |
 | 10 | Écrire les tests de sécurité xUnit | Abdedaym + Freddy | Pratique Tier 1 « Automated Security Testing » |
-| 11 | Remédiation v2 : patch proposé par LLM | Abdedaym | A besoin du code de l'API et de la clé Gemini |
+| 11 | Essayer la v2 avec le vrai LLM sur de vraies failles, ajuster le prompt | Abdedaym | A besoin du code de l'API et de la clé Gemini |
 | 12 | Branche `vulnerable-demo` | Abdedaym + Freddy | Semaine 7 |
 
-**Pourquoi la v2 n'est pas faite.** Elle demande de faire écrire du code C# par un LLM et de
-le valider en compilant et en lançant les tests. Sans code d'API à corriger et sans clé pour
-le LLM, rien de cela ne peut être essayé. La structure est prête : il suffira d'ajouter un
-nouveau type de correctif dans `fixers.py`, tous les garde-fous et la publication sont
-partagés.
+**Ce qui manque à la v2.** Le mécanisme est écrit et testé, mais avec un LLM simulé. Tant
+qu'il n'y a ni clé Gemini ni code d'API, on ne sait pas si les patchs du vrai LLM seront bons
+du premier coup. Les contrôles garantissent seulement qu'un mauvais patch ne devient pas une
+PR.
 
 **Rappel du planning.** Le contexte de la semaine dit de ne pas présenter la remédiation avant
-mercredi. Pour le 14 octobre, seule la PR `docs/demo-detection` est utile.
+mercredi. Pour le 14 octobre, seule la PR #8 (`docs/demo-detection`) est utile.
 
 ---
 
@@ -498,11 +561,21 @@ complète sur la PR du bot (build, tests, scans), et la relecture humaine.
 Tout fichier dans `.github/` ou `infra/` est refusé, et seuls les fichiers de dépendances sont
 autorisés. Le contrôle porte sur les fichiers réellement modifiés, pas sur ce qui était prévu.
 
+**Vous laissez un LLM écrire du code dans le repo ?**
+Il propose, il ne décide pas. Son patch est limité à quelques lignes d'un seul fichier, il est
+contrôlé, il doit compiler, et il arrive dans une PR marquée « écrit par un LLM » qui repasse
+par toute la pipeline et attend une approbation humaine. Si un contrôle échoue, il n'y a pas
+de PR.
+
+**Et si le LLM se fait manipuler par un commentaire dans le code ?**
+Le risque existe et il est écrit dans le threat model (T10). Les contrôles limitent ce qu'un
+patch peut faire, mais ne prouvent pas qu'il est bon : c'est pour cela qu'il n'y a jamais de
+merge automatique.
+
 **Pourquoi ne pas simplement utiliser Dependabot ?**
 Les deux se complètent. Dependabot surveille `main` et propose des mises à jour au fil du
 temps. La remédiation agit **sur la PR en cours**, avant le merge, et dans l'ordre du Risk
-Score calculé par l'agent. Elle est aussi le socle de la v2, qui corrigera du code, ce que
-Dependabot ne fait pas.
+Score calculé par l'agent. Et sa v2 corrige du code, ce que Dependabot ne fait pas.
 
 **Pourquoi un secret n'est-il pas corrigé automatiquement ?**
 Parce que le retirer du code ne suffit pas, comme l'a montré la démo : il reste dans
@@ -536,7 +609,7 @@ Déjà disponibles :
 À produire :
 
 - Les captures d'écran listées dans `docs/captures/README.md`.
-- Une capture des 46 tests qui passent.
+- Une capture des 65 tests qui passent.
 - La première PR `autofix/...` ouverte par le bot, son diff, et la pipeline verte dessus.
 - Le commentaire de synthèse de la remédiation sur une vraie PR.
 - Le temps d'exécution du job, pour la section « impact performance ».
