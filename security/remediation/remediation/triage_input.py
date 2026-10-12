@@ -160,8 +160,8 @@ def _candidate(finding: dict) -> Candidate:
 
 _OUT_OF_SCOPE = {
     "secret": "un secret ne se corrige pas par une PR : il faut le révoquer",
-    "code": "correctif de code : prévu en v2 (patch proposé par LLM)",
-    "config": "correctif de configuration : prévu en v2",
+    "code": "pas de correctif automatique pour ce finding (cas non géré, ou patch LLM non disponible)",
+    "config": "correctif de configuration non géré",
 }
 
 

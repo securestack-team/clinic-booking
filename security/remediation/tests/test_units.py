@@ -116,7 +116,7 @@ class SelectionTest(unittest.TestCase):
         self.assertEqual(candidates, [])
         reasons = {item.id: item.reason for item in skipped}
         self.assertIn("révoquer", reasons["111111111111"])
-        self.assertIn("v2", reasons["222222222222"])
+        self.assertIn("patch LLM non disponible", reasons["222222222222"])
         self.assertIn("non géré en v1", reasons["333333333333"])
         self.assertIn("aucune version corrigée", reasons["444444444444"])
         self.assertIn("pas le droit", reasons["555555555555"])
