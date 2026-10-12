@@ -4,7 +4,8 @@ Ce document explique en détail le travail réalisé pour le module de **Mohamme
 le **threat model v1** et l'**agent IA de triage**. Il sert à comprendre le code, à le
 présenter, et à savoir ce qu'il reste à faire.
 
-> État au 12 octobre 2026. Le travail est sur deux branches, en attente de Pull Request.
+> État au 13 octobre 2026. Le travail est sur deux branches ; les deux Pull Requests sont
+> ouvertes, pipeline verte, en attente d'une approbation.
 
 ## Sommaire
 
@@ -41,13 +42,13 @@ En chiffres : 13 fichiers Python pour l'agent (environ 1 260 lignes), 79 tests a
 
 ## 2. Où se trouve le travail
 
-| Branche | Commits | Contenu |
+| Branche | Pull Request | Contenu |
 |---|---|---|
-| `docs/threat-model-v1` | `2bc19e0` | `docs/threat-model-v1.md` |
-| `feature/ai-security-agent` | `1fdace7`, `cc10a00` | Tout le dossier `security/agent` + ce document |
+| `docs/threat-model-v1` | [#6](https://github.com/securestack-team/clinic-booking/pull/6) | `docs/threat-model-v1.md` et son diagramme en image |
+| `feature/ai-security-agent` | [#7](https://github.com/securestack-team/clinic-booking/pull/7) | Tout le dossier `security/agent` + ce document |
 
-Les deux branches partent de `main`. Rien n'a été poussé directement sur `main` : il faut ouvrir
-une Pull Request par branche, avec une approbation chacune.
+Les deux branches partent de `main`. Rien n'a été poussé directement sur `main`. Les deux PR
+sont ouvertes et leur pipeline est verte : il leur manque une approbation chacune.
 
 Aucun fichier d'un autre module n'a été modifié : ni `.github/workflows`, ni `/api`, ni
 `/infra`, ni le `README.md` de la racine.
@@ -505,7 +506,7 @@ Ces points sont à contrôler avant de dire que le module est terminé.
 |---|---|---|
 | L'appel réel à Gemini | Aucune clé disponible | `python3 -m triage --check-llm` avec `GEMINI_API_KEY` |
 | Le nom du modèle `gemini-3.5-flash-lite` | Lu dans la documentation Google, pas essayé | Même commande ; sinon changer avec `--model` |
-| Le rendu du diagramme Mermaid | Pas d'outil de rendu disponible au moment de l'écrire | Ouvrir `docs/threat-model-v1.md` sur GitHub |
+| L'affichage du diagramme sur GitHub | Le diagramme est correct : il a été rendu avec la bibliothèque Mermaid 11 et exporté en `docs/threat-model-v1-dfd.png`. Seul l'aperçu de GitHub n'a pas pu être observé (réseau trop lent) | Ouvrir `docs/threat-model-v1.md` sur GitHub ; sinon utiliser l'image |
 | La publication réelle du commentaire sur une PR | Testée avec une API GitHub simulée | Ajouter le job, ouvrir une PR |
 | Les formats réels des findings CodeQL, Semgrep et des vulnérabilités / configurations Trivy | Les exemples suivent le format documenté des outils | Regarder le premier vrai commentaire de l'agent |
 | La version de Python du runner | Testé en Python 3.13 ; le code vise Python 3.10 et plus | Premier run du job |
@@ -519,7 +520,7 @@ règles CodeQL.
 
 | # | Tâche | Qui | Bloque quoi |
 |---|---|---|---|
-| 1 | Ouvrir les 2 Pull Requests et les faire approuver | Abdedaym ou Mohammed + 1 relecteur | Tout le reste |
+| 1 | Faire approuver les Pull Requests #6 et #7 | 1 relecteur de l'équipe | Tout le reste |
 | 2 | Relire et comprendre le code de l'agent | Mohammed | La soutenance |
 | 3 | Créer une clé sur Google AI Studio | Mohammed | Le triage LLM |
 | 4 | Ajouter le secret `GEMINI_API_KEY` au repo | Ali (admin) | Le triage LLM |
