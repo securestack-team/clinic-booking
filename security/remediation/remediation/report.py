@@ -7,10 +7,11 @@ ils passent par md() avant d'être affichés sur GitHub.
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 
 from . import SCHEMA_VERSION
+from .codefix import TITLE, CodeCandidate
 from .triage_input import Candidate, Skipped
 
 SUMMARY_MARKER = "<!-- ai-autofix-summary -->"
@@ -32,25 +33,40 @@ class Outcome:
 
     status: str  # opened | planned | failed | skipped
     id: str
-    package: str
-    ecosystem: str
-    manifest: str
-    installed_version: str
-    target_version: str
-    advisories: list[str]
-    finding_ids: list[str]
+    kind: str  # dependency (v1) | code (v2, patch proposé par LLM)
     risk_score: float
-    major_bump: bool
+    finding_ids: list[str]
+    # correctif de dépendance
+    package: str = ""
+    ecosystem: str = ""
+    manifest: str = ""
+    installed_version: str = ""
+    target_version: str = ""
+    advisories: list[str] = field(default_factory=list)
+    major_bump: bool = False
+    # patch de code
+    file: str = ""
+    line: int = 0
+    cwe: list[str] = field(default_factory=list)
+    fix: str = ""  # sql | authz | secret
+    # résultat
     branch: str = ""
     pr_number: int | None = None
     pr_url: str = ""
     reason: str = ""
+
+    @property
+    def label(self) -> str:
+        if self.kind == "code":
+            return f"patch LLM ({self.fix}) {self.file}:{self.line}"
+        return f"{self.package} {self.installed_version} → {self.target_version}"
 
     @classmethod
     def of(cls, candidate: Candidate, status: str, **extra) -> "Outcome":
         return cls(
             status=status,
             id=candidate.id,
+            kind="dependency",
             package=candidate.package,
             ecosystem=candidate.ecosystem,
             manifest=candidate.manifest,
@@ -60,6 +76,21 @@ class Outcome:
             finding_ids=candidate.finding_ids,
             risk_score=candidate.risk_score,
             major_bump=candidate.major_bump,
+            **extra,
+        )
+
+    @classmethod
+    def of_code(cls, candidate: CodeCandidate, status: str, **extra) -> "Outcome":
+        return cls(
+            status=status,
+            id=candidate.id,
+            kind="code",
+            risk_score=candidate.risk_score,
+            finding_ids=[candidate.id],
+            file=candidate.file,
+            line=candidate.line,
+            cwe=candidate.cwe,
+            fix=candidate.kind,
             **extra,
         )
 
@@ -122,6 +153,53 @@ def pr_body(candidate: Candidate) -> str:
     return "\n".join(lines)
 
 
+def code_pr_title(candidate: CodeCandidate) -> str:
+    return f"fix: {TITLE[candidate.kind]} in {candidate.file.rsplit('/', 1)[-1]}"
+
+
+def code_commit_message(candidate: CodeCandidate) -> str:
+    return (
+        f"{code_pr_title(candidate)}\n\n"
+        f"Corrige {', '.join(candidate.cwe)} ({candidate.file}, ligne {candidate.line}).\n"
+        f"Patch proposé par un LLM via la remédiation automatique (finding {candidate.id})."
+    )
+
+
+def code_pr_body(candidate: CodeCandidate, explanation: str) -> str:
+    lines = [
+        f"## Correctif automatique proposé par un LLM : {TITLE[candidate.kind]}",
+        "",
+        "> ⚠️ **Ce patch a été écrit par un LLM.** Il compile, mais personne ne l'a encore relu. "
+        "Lire le diff ligne par ligne avant d'approuver.",
+        "",
+        "| | |",
+        "|---|---|",
+        f"| Fichier | `{candidate.file}`, ligne {candidate.line} |",
+        f"| Vulnérabilité | {', '.join(candidate.cwe)} ({md(candidate.rule, 120)}) |",
+        f"| Risk Score | {candidate.risk_score:.1f}/10 |",
+        f"| Finding du triage | `{candidate.id}` |",
+        f"| Explication du LLM | {md(explanation, 400) or 'aucune'} |",
+        "",
+    ]
+    if candidate.kind == "secret":
+        lines += [
+            "> 🔑 **Le secret reste dans l'historique Git.** Cette PR le retire du code, mais il doit "
+            "être **révoqué** et remplacé, puis rangé dans Key Vault / user-secrets.",
+            "",
+        ]
+    lines += [
+        "## À vérifier avant de merger",
+        "- [ ] Le diff ne fait que corriger la vulnérabilité, rien d'autre",
+        "- [ ] La pipeline est verte : build, tests et scans (le finding a disparu)",
+        "- [ ] Le comportement de l'endpoint est toujours le bon",
+        "",
+        "Contrôles déjà passés : un seul fichier modifié, patch de petite taille, pas de secret ajouté, "
+        "`dotnet build` réussi. **Cette PR n'est jamais mergée automatiquement.**",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def build_report(outcomes: list[Outcome], skipped: list[Skipped], mode: str, base: str, max_prs: int) -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
@@ -141,11 +219,11 @@ def render_summary(report: dict) -> str:
     if report["mode"] == "dry-run":
         lines += ["Mode **simulation** : aucune branche ni Pull Request n'a été créée.", ""]
     if not results:
-        lines.append("Aucun paquet vulnérable à mettre à jour dans ce triage.")
+        lines.append("Aucun correctif automatique possible pour ce triage.")
     else:
         lines += [
-            "| Résultat | Paquet | Version | Vulnérabilité(s) | Détail |",
-            "|---|---|---|---|---|",
+            "| Résultat | Correctif | Vulnérabilité(s) | Détail |",
+            "|---|---|---|---|",
         ]
         lines += [_row(result) for result in results]
     not_fixable = report["not_fixable"]
@@ -173,11 +251,11 @@ def _row(result: dict) -> str:
         detail = f"#{result['pr_number']} (branche `{result['branch']}`)"
     if result["major_bump"]:
         detail += " ⚠️ version majeure"
-    cells = [
-        _STATUS_LABEL[result["status"]],
-        f"`{result['package']}`",
-        f"{result['installed_version']} → {result['target_version']}",
-        ", ".join(result["advisories"]) or "non précisé",
-        detail.strip(),
-    ]
-    return "| " + " | ".join(cells) + " |"
+    if result["kind"] == "code":
+        # Chemin et CWE viennent du triage, mais ont été validés par guardrails.py.
+        fix = f"Patch LLM : {TITLE[result['fix']]}<br>`{result['file']}`, ligne {result['line']}"
+        vulnerabilities = ", ".join(result["cwe"])
+    else:
+        fix = f"`{result['package']}` {result['installed_version']} → {result['target_version']}"
+        vulnerabilities = ", ".join(result["advisories"]) or "non précisé"
+    return "| " + " | ".join([_STATUS_LABEL[result["status"]], fix, vulnerabilities, detail.strip()]) + " |"

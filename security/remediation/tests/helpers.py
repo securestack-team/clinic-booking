@@ -108,14 +108,17 @@ def write_triage(tmp: Path, *findings: dict) -> Path:
 class FakeTools:
     """Remplace dotnet et npm : fait ce que ferait le vrai outil sur le lockfile."""
 
-    def __init__(self, exit_code: int = 0, update_lock: bool = True, extra_file: str | None = None):
+    def __init__(self, exit_code: int = 0, update_lock: bool = True, extra_file: str | None = None, build_exit_code: int = 0):
         self.exit_code = exit_code
         self.update_lock = update_lock
         self.extra_file = extra_file  # fichier modifié « en douce » par l'outil
+        self.build_exit_code = build_exit_code  # résultat de « dotnet build » (v2)
         self.commands: list[list[str]] = []
 
     def __call__(self, command: list[str], cwd: Path) -> tuple[int, str]:
         self.commands.append(command)
+        if command[:2] == ["dotnet", "build"] and self.build_exit_code:
+            return self.build_exit_code, "Controllers/X.cs(22,6): error CS0246: The type or namespace name 'Authorize' could not be found"
         if self.exit_code:
             return self.exit_code, "erreur simulée"
         if self.extra_file:
@@ -190,3 +193,102 @@ class FakeGitHub:
 
     def made(self, method: str, url_part: str) -> list[tuple]:
         return [call for call in self.calls if call[0] == method and url_part in call[1]]
+
+
+# --- v2 : code de l'API et LLM simulé ---------------------------------------------------
+
+CONTROLLER = """using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace Api.Controllers;
+
+[ApiController]
+[Route("api/appointments")]
+public class AppointmentsController : ControllerBase
+{
+    private readonly AppDbContext _db;
+
+    public AppointmentsController(AppDbContext db) => _db = db;
+
+    [HttpGet("search")]
+    public IActionResult Search(string name)
+    {
+        var rows = _db.Appointments.FromSqlRaw("SELECT * FROM Appointments WHERE PatientName = '" + name + "'");
+        return Ok(rows);
+    }
+
+    [HttpDelete("{id}")]
+    public IActionResult Delete(int id)
+    {
+        _db.Appointments.Remove(_db.Appointments.Find(id)!);
+        return NoContent();
+    }
+}
+"""
+SQL_LINE, AUTHZ_LINE, SECRET_LINE = 17, 22, 5
+CONTROLLER_FILE = "api/Controllers/AppointmentsController.cs"
+SERVICE_FILE = "api/Services/TokenService.cs"
+
+
+def fake_signing_key() -> str:
+    """Fausse valeur fabriquée à l'exécution : écrite d'un seul tenant ici, elle ferait réagir Gitleaks."""
+    return "clinic-" + "signing-key-" + "2026-demo"
+
+
+def add_api_code(repo: Path) -> None:
+    """Ajoute au faux repo un contrôleur vulnérable et un service avec un secret en dur, puis pousse."""
+    (repo / "api/Controllers").mkdir()
+    (repo / "api/Services").mkdir()
+    (repo / CONTROLLER_FILE).write_text(CONTROLLER, encoding="utf-8")
+    (repo / SERVICE_FILE).write_text(
+        "namespace Api.Services;\n\npublic class TokenService\n{\n"
+        f'    private const string SigningKey = "{fake_signing_key()}";\n'
+        '    private const string Issuer = "clinic-booking";\n}\n',
+        encoding="utf-8",
+    )
+    git(repo, "add", "-A")
+    git(repo, "commit", "--quiet", "-m", "feat: api code")
+    git(repo, "push", "--quiet", "origin", "main")
+
+
+def code_finding(finding_id: str, cwe: str, file: str, line: int, category: str = "code", risk: float = 8.8, rule: str = "cs/regle") -> dict:
+    return {"id": finding_id, "category": category, "severity": "high", "risk_score": risk, "rules": [rule], "cwe": [cwe], "file": file, "line": line, "recommendation": "Corriger."}
+
+
+SQLI = code_finding("c0de00000001", "CWE-89", CONTROLLER_FILE, SQL_LINE, rule="cs/sql-injection")
+AUTHZ = code_finding("c0de00000002", "CWE-862", CONTROLLER_FILE, AUTHZ_LINE, risk=7.0, rule="cs/missing-authorization")
+HARDCODED = code_finding("c0de00000003", "CWE-798", SERVICE_FILE, SECRET_LINE, category="secret", risk=9.5, rule="cs/hardcoded-credentials")
+
+GOOD_SQL_PATCH = {
+    "start_line": SQL_LINE,
+    "end_line": SQL_LINE,
+    "replacement": '        var rows = _db.Appointments.FromSqlInterpolated($"SELECT * FROM Appointments WHERE PatientName = {name}");',
+    "explanation": "La valeur est passée en paramètre au lieu d'être concaténée.",
+}
+GOOD_AUTHZ_PATCH = {
+    "start_line": AUTHZ_LINE,
+    "end_line": AUTHZ_LINE,
+    "replacement": '    [Authorize(Roles = "Admin")]\n    public IActionResult Delete(int id)',
+    "explanation": "L'endpoint de suppression exige maintenant un utilisateur authentifié.",
+}
+GOOD_SECRET_PATCH = {
+    "start_line": SECRET_LINE,
+    "end_line": SECRET_LINE,
+    "replacement": '    private static string SigningKey => Environment.GetEnvironmentVariable("JWT_SIGNING_KEY") ?? throw new InvalidOperationException();',
+    "explanation": "La clé est lue depuis l'environnement.",
+}
+
+
+class FakeLLM:
+    """Remplace Gemini : enregistre les prompts, renvoie les réponses prévues (une par appel)."""
+
+    def __init__(self, *replies):
+        self.replies = list(replies)
+        self.prompts: list[str] = []
+
+    def __call__(self, config, system, user):
+        self.prompts.append(user)
+        reply = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
+        if isinstance(reply, Exception):
+            raise reply
+        return reply if isinstance(reply, str) else json.dumps(reply)

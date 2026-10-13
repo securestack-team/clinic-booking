@@ -1,7 +1,11 @@
 # Remédiation automatique
 
 La remédiation lit `reports/triage.json` (produit par l'agent IA) et ouvre une **Pull Request de
-correctif** pour chaque paquet vulnérable qu'elle sait corriger.
+correctif** pour ce qu'elle sait corriger :
+
+- **v1** : un paquet vulnérable (NuGet, npm) → mise à jour vers la version corrigée ;
+- **v2** : une injection SQL, un `[Authorize]` manquant ou un secret en dur dans le code C# de
+  l'API → patch proposé par un LLM, contrôlé puis compilé.
 
 ```
 reports/triage.json ─► choisir ─► planifier ─► appliquer ─► vérifier ─► branche autofix/<id>
@@ -41,6 +45,7 @@ python3 -m remediation --triage ../../reports/triage.json --repo-root ../.. --ba
 | `--base` | Branche à corriger (défaut : la branche de la PR en cours) |
 | `--max-prs` | Nombre maximum de PR par exécution (défaut : 3, plafond : 10) |
 | `--apply` | Crée réellement les branches et les PR. Sans cette option : simulation |
+| `--no-llm` | v1 seulement : ne demande aucun patch de code au LLM |
 
 | Variable | Rôle |
 |---|---|
@@ -48,6 +53,8 @@ python3 -m remediation --triage ../../reports/triage.json --repo-root ../.. --ba
 | `GITHUB_TOKEN` | Utilisé si `AUTOFIX_TOKEN` est absent |
 | `GITHUB_REPOSITORY` | `organisation/repo` |
 | `AUTOFIX_GIT_NAME`, `AUTOFIX_GIT_EMAIL` | Auteur des commits (défaut : `github-actions[bot]`) |
+| `GEMINI_API_KEY` | Active la v2. Sans cette clé, seule la v1 tourne |
+| `AUTOFIX_LLM_MODEL` | Modèle Gemini pour les patchs (défaut : `gemini-3.8-flash`) |
 
 ## Ce qui est corrigé (v1)
 
@@ -62,12 +69,46 @@ Ce qui n'est **pas** corrigé, avec un commentaire qui explique pourquoi :
 - les dépendances transitives (le paquet n'est pas référencé directement) ;
 - un paquet sans version corrigée ;
 - une version écrite comme une plage ou une variable MSBuild ;
-- les secrets (il faut les révoquer), le code et la configuration (prévu en v2) ;
+- les secrets trouvés par Gitleaks ou Trivy (il faut les révoquer) et la configuration ;
 - tout fichier dans `.github/` ou `infra/`.
 
 Plusieurs CVE sur le même paquet donnent **une seule PR**, vers la version qui les corrige
 toutes. Si Trivy propose plusieurs versions corrigées, on prend la plus petite, de préférence
 dans la même version majeure.
+
+## Ce qui est corrigé (v2) : patch proposé par un LLM
+
+| Cas | CWE | Ce que le LLM doit faire |
+|---|---|---|
+| Injection SQL | CWE-89 | Remplacer la requête concaténée par une requête paramétrée |
+| Autorisation manquante | CWE-862, CWE-285, CWE-306 | Ajouter `[Authorize]` sur l'endpoint |
+| Secret en dur dans le code | CWE-798, CWE-259, CWE-321 | Lire la valeur depuis la configuration |
+
+Seulement pour un fichier `.cs` dans `api/`, et seulement si `GEMINI_API_KEY` existe.
+
+Le LLM reçoit 12 lignes avant et après la ligne signalée, numérotées, **secrets masqués**. Pour
+un secret en dur, toutes les chaînes de caractères de l'extrait sont effacées avant l'envoi. Il
+répond par un seul remplacement de lignes, en JSON.
+
+Le LLM propose, la remédiation contrôle. Un patch ne devient une PR que s'il passe **tous** les
+contrôles ; sinon, pas de PR, un commentaire avec la raison :
+
+| Contrôle | Détail |
+|---|---|
+| Forme | JSON exact ; un seul remplacement, de 12 lignes au plus, qui couvre la ligne signalée |
+| Contenu | Pas de `[MASQUÉ]` recopié, pas de valeur qui ressemble à un secret, un vrai changement |
+| Cas par cas | SQL : plus de concaténation dans `FromSqlRaw` · autorisation : `[Authorize]` présent, pas de `[AllowAnonymous]` · secret : la valeur en dur a disparu |
+| Périmètre | Un seul fichier modifié : celui du finding |
+| Compilation | `dotnet build` doit réussir sur le projet |
+
+La PR porte un avertissement : le patch a été écrit par un LLM et doit être relu ligne par
+ligne. Pour un secret en dur, elle rappelle qu'il reste dans l'historique et doit être révoqué.
+
+Ces contrôles réduisent le risque, ils ne prouvent pas que le patch est bon. Un LLM manipulé
+par un commentaire dans le code pourrait proposer un patch qui compile mais fait autre chose :
+c'est pour cela que la pipeline complète et la relecture humaine restent obligatoires.
+
+Les correctifs v1 passent avant les patchs v2, et la limite de PR par exécution est commune.
 
 ## Les garde-fous
 
@@ -131,6 +172,7 @@ Job à ajouter dans `.github/workflows/security.yml` (module CI/CD), après le j
         env:
           GITHUB_TOKEN: ${{ github.token }}
           AUTOFIX_TOKEN: ${{ secrets.AUTOFIX_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }} # optionnel : active la v2
           PYTHONPATH: security/remediation
         run: python3 -m remediation --triage reports/triage.json --output reports --apply
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -162,5 +204,8 @@ and approve pull requests ».
 - `dotnet restore` évalue le fichier de projet de la PR, qui peut contenir du code. Les tokens
   sont retirés de l'environnement de l'outil, mais le job ne doit tourner que sur les PR des
   membres de l'équipe (condition `if` ci-dessus).
-- La v2 (patch proposé par LLM pour une injection SQL, un `[Authorize]` manquant, un secret en
-  dur) n'est pas faite : elle a besoin du code de l'API et d'une clé pour le LLM.
+- La v2 n'a jamais reçu de vraie réponse de Gemini (pas de clé) : le LLM est simulé dans les
+  tests. La qualité réelle de ses patchs sur le code de l'API reste à mesurer.
+- Un patch v2 ne peut pas ajouter de directive `using` en haut du fichier : le LLM doit écrire
+  le nom complet d'un type absent, sinon le patch ne compile pas et il n'y a pas de PR.
+- `dotnet build` prouve que le patch compile, pas qu'il est correct.
