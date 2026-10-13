@@ -1,0 +1,108 @@
+{
+  "version": "2.1.0",
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "fullName": "Trivy Vulnerability Scanner",
+          "informationUri": "https://github.com/aquasecurity/trivy",
+          "name": "Trivy",
+          "version": "0.74.0",
+          "rules": [
+            {
+              "id": "CVE-2024-21907",
+              "name": "LanguageSpecificPackageVulnerability",
+              "shortDescription": { "text": "Newtonsoft.Json: denial of service via deeply nested JSON" },
+              "defaultConfiguration": { "level": "error" },
+              "helpUri": "https://avd.aquasec.com/nvd/cve-2024-21907",
+              "properties": {
+                "precision": "very-high",
+                "security-severity": "7.5",
+                "tags": ["vulnerability", "security", "HIGH"]
+              }
+            },
+            {
+              "id": "DS-0002",
+              "name": "Misconfiguration",
+              "shortDescription": { "text": "Image user should not be 'root'" },
+              "defaultConfiguration": { "level": "error" },
+              "helpUri": "https://avd.aquasec.com/misconfig/ds-0002",
+              "properties": {
+                "precision": "very-high",
+                "security-severity": "8.0",
+                "tags": ["misconfiguration", "security", "HIGH"]
+              }
+            },
+            {
+              "id": "aws-access-key-id",
+              "name": "Secret",
+              "shortDescription": { "text": "AWS Access Key ID" },
+              "defaultConfiguration": { "level": "error" },
+              "properties": {
+                "precision": "very-high",
+                "security-severity": "9.5",
+                "tags": ["secret", "security", "CRITICAL"]
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "CVE-2024-21907",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "Package: Newtonsoft.Json\nInstalled Version: 12.0.1\nVulnerability CVE-2024-21907\nSeverity: HIGH\nFixed Version: 13.0.1\nLink: [CVE-2024-21907](https://avd.aquasec.com/nvd/cve-2024-21907)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "api/packages.lock.json", "uriBaseId": "ROOTPATH" },
+                "region": { "startLine": 5, "startColumn": 1, "endLine": 5, "endColumn": 1 }
+              },
+              "message": { "text": "api/packages.lock.json: Newtonsoft.Json@12.0.1" }
+            }
+          ]
+        },
+        {
+          "ruleId": "DS-0002",
+          "ruleIndex": 1,
+          "level": "error",
+          "message": {
+            "text": "Artifact: api/Dockerfile\nType: dockerfile\nVulnerability DS-0002\nSeverity: HIGH\nMessage: Last USER command in Dockerfile should not be 'root'\nLink: [DS-0002](https://avd.aquasec.com/misconfig/ds-0002)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "api/Dockerfile", "uriBaseId": "ROOTPATH" },
+                "region": { "startLine": 2, "startColumn": 1, "endLine": 2, "endColumn": 1 }
+              },
+              "message": { "text": "api/Dockerfile" }
+            }
+          ]
+        },
+        {
+          "ruleId": "aws-access-key-id",
+          "ruleIndex": 2,
+          "level": "error",
+          "message": {
+            "text": "Artifact: api/appsettings.json\nType: \nSecret AWS Access Key ID\nSeverity: CRITICAL\nMatch:     \"AccessKey\": \"********************\","
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "api/appsettings.json", "uriBaseId": "ROOTPATH" },
+                "region": { "startLine": 3, "startColumn": 1, "endLine": 3, "endColumn": 1 }
+              },
+              "message": { "text": "api/appsettings.json" }
+            }
+          ]
+        }
+      ],
+      "columnKind": "utf16CodeUnits",
+      "originalUriBaseIds": { "ROOTPATH": { "uri": "file:///repo/" } }
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Réponse attendue du LLM pour un lot de findings",
+  "type": "object",
+  "required": ["findings"],
+  "additionalProperties": false,
+  "properties": {
+    "findings": {
+      "description": "Chaque élément est validé séparément avec $defs/assessment : un élément invalide est ignoré sans faire rejeter les autres.",
+      "type": "array",
+      "maxItems": 50
+    }
+  },
+  "$defs": {
+    "assessment": {
+      "type": "object",
+      "required": ["id", "false_positive_probability", "exploitability", "rationale", "recommendation"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "false_positive_probability": { "type": "number", "minimum": 0, "maximum": 1 },
+        "exploitability": { "type": "number", "minimum": 0, "maximum": 1 },
+        "rationale": { "type": "string", "maxLength": 400 },
+        "recommendation": { "type": "string", "maxLength": 400 }
+      }
+    }
+  }
+}

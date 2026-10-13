@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "reports/triage.json : contrat entre l'agent IA et la remédiation automatique",
+  "type": "object",
+  "required": ["schema_version", "generated_at", "commit", "llm", "summary", "findings"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "string" },
+    "generated_at": { "type": "string" },
+    "commit": { "type": ["string", "null"] },
+    "llm": {
+      "type": "object",
+      "required": ["provider", "model", "used", "triaged", "error"],
+      "additionalProperties": false,
+      "properties": {
+        "provider": { "type": ["string", "null"] },
+        "model": { "type": ["string", "null"] },
+        "used": { "type": "boolean" },
+        "triaged": { "type": "integer", "minimum": 0 },
+        "error": { "type": ["string", "null"] }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["raw_findings", "findings", "max_risk_score", "by_risk_level", "warnings"],
+      "additionalProperties": false,
+      "properties": {
+        "raw_findings": { "type": "integer", "minimum": 0 },
+        "findings": { "type": "integer", "minimum": 0 },
+        "max_risk_score": { "type": "number", "minimum": 0, "maximum": 10 },
+        "by_risk_level": {
+          "type": "object",
+          "required": ["critical", "high", "medium", "low"],
+          "additionalProperties": false,
+          "properties": {
+            "critical": { "type": "integer", "minimum": 0 },
+            "high": { "type": "integer", "minimum": 0 },
+            "medium": { "type": "integer", "minimum": 0 },
+            "low": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id", "category", "severity", "cvss", "tools", "rules", "cwe", "file", "line",
+          "message", "package", "occurrences", "exposure", "confidence",
+          "false_positive_probability", "exploitability", "risk_score", "risk_level",
+          "rationale", "recommendation", "llm_triaged"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "maxLength": 12 },
+          "category": { "enum": ["secret", "dependency", "config", "code"] },
+          "severity": { "enum": ["info", "low", "medium", "high", "critical"] },
+          "cvss": { "type": ["number", "null"], "minimum": 0, "maximum": 10 },
+          "tools": { "type": "array", "items": { "type": "string" } },
+          "rules": { "type": "array", "items": { "type": "string" } },
+          "cwe": { "type": "array", "items": { "type": "string" } },
+          "file": { "type": "string" },
+          "line": { "type": "integer", "minimum": 0 },
+          "message": { "type": "string", "maxLength": 1000 },
+          "package": {
+            "type": ["object", "null"],
+            "required": ["name", "installed_version", "fixed_version", "advisory"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "installed_version": { "type": "string" },
+              "fixed_version": { "type": "string" },
+              "advisory": { "type": "string" }
+            }
+          },
+          "occurrences": { "type": "integer", "minimum": 1 },
+          "exposure": { "type": "number", "minimum": 0, "maximum": 1 },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "false_positive_probability": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+          "exploitability": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+          "risk_score": { "type": "number", "minimum": 0, "maximum": 10 },
+          "risk_level": { "enum": ["critical", "high", "medium", "low"] },
+          "rationale": { "type": "string", "maxLength": 400 },
+          "recommendation": { "type": "string", "maxLength": 400 },
+          "llm_triaged": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}
