@@ -85,6 +85,31 @@ jobs:
           docker run --rm -v "$PWD:/repo" -w /repo aquasec/trivy:0.74.0 \
             fs --scanners vuln,misconfig,secret --severity HIGH,CRITICAL --exit-code 1 .
 
+  semgrep:
+    name: Semgrep (SAST)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Analyse SAST et rapport SARIF
+        run: |
+          mkdir -p reports && chmod 777 reports
+          docker run --rm -v "$PWD:/src" -w /src semgrep/semgrep:1.140.0 \
+            semgrep --config auto --sarif --output /src/reports/semgrep.sarif
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          sarif_file: reports/semgrep.sarif
+          category: semgrep
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: sarif-semgrep
+          path: reports/semgrep.sarif
+
   codeql:
     name: CodeQL (${{ matrix.language }})
     needs: detect
