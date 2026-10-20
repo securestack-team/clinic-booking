@@ -261,11 +261,16 @@ class CorrectifsTest(unittest.TestCase):
         self.assertIn("12.0.1", outside.read_text(encoding="utf-8"))
 
     def test_l_outil_ne_voit_pas_les_secrets_de_l_environnement(self):
-        program = "import os; print(sorted(k for k in os.environ if k.startswith(('GITHUB', 'AUTOFIX', 'GEMINI', 'VISIBLE'))))"
-        secrets = {"GITHUB_TOKEN": "x", "AUTOFIX_TOKEN": "x", "GEMINI_API_KEY": "x", "VISIBLE_VALUE": "ok"}
-        with mock.patch.dict(os.environ, secrets):
+        # Secrets du job + jetons ajoutés par GitHub Actions lui-même.
+        secrets = ["GITHUB_TOKEN", "AUTOFIX_TOKEN", "GEMINI_API_KEY", "ACTIONS_RUNTIME_TOKEN",
+                   "ACTIONS_ID_TOKEN_REQUEST_TOKEN", "NUGET_PASSWORD", "AZURE_CLIENT_SECRET"]
+        # Variables sans secret, utiles aux outils : elles doivent rester visibles.
+        visible = ["VISIBLE_VALUE", "GITHUB_REPOSITORY", "GITHUB_WORKSPACE"]
+        names = secrets + visible
+        program = f"import os; print(sorted(k for k in {names!r} if k in os.environ))"
+        with mock.patch.dict(os.environ, {name: "x" for name in names}):
             code, output = fixers.run_tool([sys.executable, "-c", program], self.repo)
-        self.assertEqual((code, output.strip()), (0, "['VISIBLE_VALUE']"))
+        self.assertEqual((code, output.strip()), (0, str(sorted(visible))))
 
     def test_outil_absent(self):
         with self.assertRaises(CannotFix) as caught:
