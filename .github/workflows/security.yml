@@ -125,7 +125,7 @@ jobs:
 
   ai-triage:
     name: AI Security Agent
-    needs: [gitleaks, trivy, codeql]
+    needs: [gitleaks, trivy, semgrep, codeql]
     # Le rapport reste utile lorsque le quality gate d'un scanner échoue.
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
