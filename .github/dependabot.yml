@@ -1,6 +1,5 @@
-# Mises à jour automatiques des dépendances.
-# Ajouter les écosystèmes nuget (/api), npm (/web, /mobile), docker et terraform
-# dès que les fichiers correspondants existent dans le repo.
+# Mises à jour automatiques des dépendances. Les écosystèmes npm, docker et
+# terraform seront ajoutés dès que leurs fichiers de dépendances existeront.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -9,3 +8,13 @@ updates:
       interval: weekly
     commit-message:
       prefix: ci
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  - package-ecosystem: nuget
+    directory: /api
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: fix
