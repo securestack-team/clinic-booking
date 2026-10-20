@@ -158,3 +158,48 @@ jobs:
             reports/triage.json
             reports/triage.md
           if-no-files-found: warn
+
+  auto-remediation:
+    name: Auto-remediation
+    needs: ai-triage
+    # Ni secrets ni correctifs automatiques sur les forks ou les PR du bot.
+    if: >-
+      always() && github.event_name == 'pull_request'
+      && !startsWith(github.head_ref, 'autofix/')
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.AUTOFIX_TOKEN || github.token }}
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - name: Télécharger le triage
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: triage
+          path: reports
+      - name: Tests de la remédiation
+        working-directory: security/remediation
+        run: python3 -m unittest
+      - name: Proposer les correctifs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          AUTOFIX_TOKEN: ${{ secrets.AUTOFIX_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PYTHONPATH: security/remediation
+        run: python3 -m remediation --triage reports/triage.json --output reports --apply
+      - name: Publier le rapport de remédiation
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: remediation
+          path: |
+            reports/remediation.json
+            reports/remediation.md
+          if-no-files-found: warn
