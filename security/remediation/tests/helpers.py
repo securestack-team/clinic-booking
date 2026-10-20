@@ -169,7 +169,7 @@ def _worktree_root(cwd: Path) -> Path:
 class FakeGitHub:
     """Remplace l'API GitHub : enregistre les appels et répond comme elle."""
 
-    def __init__(self, existing_pulls: list[dict] | None = None, fail_create: bool = False):
+    def __init__(self, existing_pulls: list[dict] | None = None, fail_create: bool | str = False):
         self.existing_pulls = existing_pulls or []
         self.fail_create = fail_create
         self.calls: list[tuple[str, str, dict | None]] = []
@@ -186,7 +186,7 @@ class FakeGitHub:
             return []
         if method == "POST" and url.endswith("/pulls"):
             if self.fail_create:
-                raise HttpError("HTTP 422")
+                raise HttpError(self.fail_create if isinstance(self.fail_create, str) else "HTTP 422")
             number, self.next_number = self.next_number, self.next_number + 1
             return {"number": number, "html_url": f"https://github.com/o/r/pull/{number}"}
         return {}
