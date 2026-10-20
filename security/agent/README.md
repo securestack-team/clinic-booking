@@ -187,3 +187,11 @@ Job à ajouter dans `.github/workflows/security.yml` (module CI/CD) :
   l'emplacement des règles CodeQL. Les autres exemples de `tests/fixtures` (résultats CodeQL,
   Semgrep, vulnérabilités et configuration Trivy) suivent le format documenté des outils : à
   revérifier sur les premiers vrais findings de la pipeline.
+
+## Preuve : masquage des secrets
+
+Le test lance la CLI avec une fausse clé Gemini assemblée à l’exécution et intercepte `triage.llm.request_json`.
+Il vérifie le masquage des messages et du code, ainsi que l’exclusion des findings Gitleaks des corps HTTP.
+La clé ne figure que dans `x-goog-api-key` ; les rapports restent sans faux secret et conservent le finding secret à 9.5.
+Une prompt injection simulée ne peut pas réduire le score de plus d’un facteur 4 ; aucun appel réseau réel n’est autorisé.
+Depuis `security/agent` : `python3 -m unittest -v tests.test_secret_masking`.
