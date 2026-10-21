@@ -234,7 +234,7 @@ class BoutEnBoutTest(AvecRepoTest):
         self.run_cli(SQLI, AUTHZ, env=env, fake_llm=FakeLLM(GOOD_SQL_PATCH, {**GOOD_AUTHZ_PATCH, "replacement": "    public IActionResult Delete(int id) // rien"}))
         body = self.api.made("POST", "/issues/7/comments")[0][2]["body"]
         self.assertIn("✅ PR ouverte | Patch LLM : use a parameterized query", body)
-        self.assertIn("💬 Pas de correctif sûr | Patch LLM : add missing authorization", body)
+        self.assertIn("💬 Pas de PR | Patch LLM : add missing authorization", body)
         self.assertIn("n'ajoute pas \\[Authorize\\]", body)
 
 

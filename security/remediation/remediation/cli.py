@@ -213,7 +213,13 @@ def _publish(fix_id: str, outcome, work, base: str, git: Git, api: GitHub, autho
         number, url = int(pull["number"]), str(pull.get("html_url", ""))
     except (HttpError, KeyError, TypeError, ValueError) as exc:
         git.delete_remote_branch(branch)  # pas de branche orpheline sans PR
-        return outcome("failed", branch=branch, reason=f"branche poussée mais PR non créée ({exc})")
+        reason = f"correctif prêt, mais GitHub a refusé la PR ({exc}) ; branche retirée"
+        if str(exc) == "HTTP 403":
+            reason += (
+                ". Le token n'a pas le droit de créer une PR : activer « Allow GitHub Actions to create and "
+                "approve pull requests » (Settings → Actions → General) ou configurer AUTOFIX_TOKEN"
+            )
+        return outcome("failed", branch=branch, reason=reason)
     try:
         api.add_label(number)
     except HttpError as exc:

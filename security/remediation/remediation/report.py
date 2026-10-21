@@ -22,7 +22,7 @@ _MD_SPECIAL_RE = re.compile(r"([\\`*_\[\]|~])")
 _STATUS_LABEL = {
     "opened": "✅ PR ouverte",
     "planned": "📝 Correctif possible (simulation)",
-    "failed": "💬 Pas de correctif sûr",
+    "failed": "💬 Pas de PR",
     "skipped": "⏭️ Ignoré",
 }
 
