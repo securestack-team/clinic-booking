@@ -273,7 +273,7 @@ synthèse.
 > |---|---|---|---|
 > | ✅ PR ouverte | `Newtonsoft.Json` 12.0.1 → 13.0.1 | CVE-2024-21907 | #12 (branche `autofix/a90dea08ce76`) ⚠️ version majeure |
 > | ✅ PR ouverte | Patch LLM : use a parameterized query, `api/Controllers/AppointmentsController.cs`, ligne 17 | CWE-89 | #13 (branche `autofix/c0de00000001`) |
-> | 💬 Pas de correctif sûr | Patch LLM : add missing authorization, `api/Controllers/AppointmentsController.cs`, ligne 22 | CWE-862 | le projet ne compile pas avec le patch (dotnet build, code 1, CS0246) |
+> | 💬 Pas de PR | Patch LLM : add missing authorization, `api/Controllers/AppointmentsController.cs`, ligne 22 | CWE-862 | le projet ne compile pas avec le patch (dotnet build, code 1, CS0246) |
 > | ⏭️ Ignoré | `lodash` 4.17.20 → 4.17.21 | CVE-2021-23337 | limite de 3 PR par exécution atteinte |
 
 Le résultat complet est aussi écrit dans `reports/remediation.json`.
