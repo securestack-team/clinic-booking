@@ -99,3 +99,32 @@ git push -u origin feature/api-skeleton
 
 Ouvrir une PR vers `main`, faire valider par un membre de l'équipe et vérifier
 que les workflows CI et Security sont verts avant le merge.
+
+## Vérifier PostgreSQL, les migrations et le login (docker-compose)
+
+Depuis la racine du repo :
+
+```bash
+cp .env.example .env    # puis remplacer POSTGRES_PASSWORD et JWT_KEY (openssl rand -base64 48)
+docker compose up -d --build
+curl -s -H 'Content-Type: application/json' \
+  -d '{"email":"patient1@example.com","password":"Str0ng!Passw0rd"}' \
+  http://localhost:8080/api/auth/register
+curl -s -H 'Content-Type: application/json' \
+  -d '{"email":"patient1@example.com","password":"Str0ng!Passw0rd"}' \
+  http://localhost:8080/api/auth/login
+docker compose down
+```
+
+Les migrations sont appliquées au démarrage (`Database__MigrateOnStartup=true`, seulement dans
+compose). Résultats attendus (vérifiés le 3 novembre 2026) :
+
+| Requête | Statut |
+|---|---|
+| Inscription | 200 + token |
+| Mot de passe faible | 400 |
+| Mauvais mot de passe | 401 |
+| Login | 200, token avec le rôle `Patient` |
+
+Les mêmes cas sont couverts automatiquement par `tests/ClinicBooking.Api.Tests/Security/AuthTests.cs`
+(base EF Core en mémoire).
