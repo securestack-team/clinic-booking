@@ -3,7 +3,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.Configuration;
 using Xunit;
 
 namespace ClinicBooking.Api.Tests;
@@ -16,7 +15,6 @@ public sealed class EndpointsTests : IClassFixture<TestApplicationFactory>
     {
         _factory = factory;
     }
-
     [Fact]
     public async Task Health_ReturnsHealthy()
     {
@@ -64,19 +62,5 @@ public sealed class EndpointsTests : IClassFixture<TestApplicationFactory>
         using var response = await client.GetAsync(path);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-    }
-}
-
-
-public sealed class TestApplicationFactory : WebApplicationFactory<Program>
-{
-    protected override void ConfigureWebHost(IWebHostBuilder builder)
-    {
-        builder.UseSetting(
-            "ConnectionStrings:Default",
-            "Host=localhost;Database=clinic_booking_test;Username=test;Password=test");
-        builder.UseSetting("Jwt:Key", "test-only-signing-key-that-is-at-least-32-bytes");
-        builder.UseSetting("Jwt:Issuer", "ClinicBooking.Tests");
-        builder.UseSetting("Jwt:Audience", "ClinicBooking.Tests");
     }
 }
