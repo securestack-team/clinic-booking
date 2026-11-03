@@ -1,7 +1,6 @@
-# API Clinic Booking — squelette de Freddy
+# API Clinic Booking — API de Freddy
 
-Solution ASP.NET Core .NET 10 et tests d'intégration xUnit pour la présentation du
-14 octobre 2026. Aucun secret ni accès à une base de données n'est nécessaire.
+Solution ASP.NET Core .NET 10, EF Core avec PostgreSQL et tests d'intégration xUnit.
 
 ## Compiler et tester
 
@@ -11,6 +10,35 @@ Depuis `clinic-booking/api`, avec le SDK .NET 10 installé :
 dotnet restore
 dotnet build --no-restore --configuration Release
 dotnet test --no-build --configuration Release --verbosity normal
+```
+
+La base de données est configurée avec `ConnectionStrings:Default`. En local, elle
+doit être enregistrée avec les user-secrets :
+
+```bash
+dotnet user-secrets init --project src/ClinicBooking.Api
+dotnet user-secrets set "ConnectionStrings:Default" "Host=localhost;Database=clinic_booking;Username=...;Password=..." --project src/ClinicBooking.Api
+```
+
+En conteneur, utilisez la variable d'environnement
+`ConnectionStrings__Default`. La chaîne de connexion n'est jamais stockée dans
+`appsettings.json`.
+
+La clé JWT et ses paramètres sont également fournis par configuration, jamais
+dans le dépôt :
+
+```bash
+dotnet user-secrets set "Jwt:Key" "<clé aléatoire d'au moins 32 octets>" --project src/ClinicBooking.Api
+dotnet user-secrets set "Jwt:Issuer" "ClinicBooking.Api" --project src/ClinicBooking.Api
+dotnet user-secrets set "Jwt:Audience" "ClinicBooking.Clients" --project src/ClinicBooking.Api
+```
+
+En conteneur, utilisez `Jwt__Key`, `Jwt__Issuer` et `Jwt__Audience`.
+
+Pour créer ou appliquer les migrations :
+
+```bash
+dotnet ef database update --project src/ClinicBooking.Api
 ```
 
 Ces commandes sont celles du workflow CI existant. La solution `ClinicBooking.slnx`
@@ -45,6 +73,10 @@ variable d'environnement pour le nom d'hôte du déploiement.
   vérifient le document et l'interface en développement, puis leur absence en production.
 - `/health` indique la disponibilité du processus, sans détails internes.
 - `/api/ping` retourne une réponse fixe, sans entrée utilisateur ni donnée patient.
+- Le modèle `Appointment` stocke le patient, le médecin, la date et le statut ;
+  ses migrations sont versionnées dans `src/ClinicBooking.Api/Migrations`.
+- `POST /api/auth/register` crée un compte Patient et retourne un access token
+  court ; `POST /api/auth/login` authentifie un compte existant.
 - Les erreurs utilisent ProblemDetails ; HSTS est activé hors développement.
 - `appsettings.json` contient uniquement les niveaux de logs et les hôtes autorisés.
 - Les analyseurs Roslyn sont activés avec `latest-recommended`.
