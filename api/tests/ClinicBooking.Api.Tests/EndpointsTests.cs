@@ -7,15 +7,14 @@ using Xunit;
 
 namespace ClinicBooking.Api.Tests;
 
-public sealed class EndpointsTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed class EndpointsTests : IClassFixture<TestApplicationFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestApplicationFactory _factory;
 
-    public EndpointsTests(WebApplicationFactory<Program> factory)
+    public EndpointsTests(TestApplicationFactory factory)
     {
         _factory = factory;
     }
-
     [Fact]
     public async Task Health_ReturnsHealthy()
     {

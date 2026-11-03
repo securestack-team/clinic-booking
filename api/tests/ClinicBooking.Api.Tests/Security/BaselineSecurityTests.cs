@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using ClinicBooking.Api.Tests;
 using Xunit;
 
 namespace ClinicBooking.Api.Tests.Security;
@@ -13,14 +14,14 @@ namespace ClinicBooking.Api.Tests.Security;
 /// hôtes autorisés, erreurs sans détail interne, HSTS et CORS.
 /// Les tests 401 / 403 / 400 viendront avec le login JWT.
 /// </summary>
-public sealed class BaselineSecurityTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed class BaselineSecurityTests : IClassFixture<TestApplicationFactory>
 {
     private const string BoomPath = "/__test/boom";
     private const string InternalDetail = "detail-interne-qui-ne-doit-pas-sortir";
 
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestApplicationFactory _factory;
 
-    public BaselineSecurityTests(WebApplicationFactory<Program> factory)
+    public BaselineSecurityTests(TestApplicationFactory factory)
     {
         _factory = factory;
     }

@@ -26,6 +26,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      Jwt__Key: ${JWT_KEY:?définir JWT_KEY dans .env (32 caractères minimum)}
+      Jwt__Issuer: ${JWT_ISSUER:-ClinicBooking}
+      Jwt__Audience: ${JWT_AUDIENCE:-ClinicBooking}
+      Database__MigrateOnStartup: "true"
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
