@@ -1,0 +1,6 @@
+# Copier en backend.hcl (non commité) et remplir avec le storage account du state.
+resource_group_name  = "rg-clinicbooking-tfstate"
+storage_account_name = "stclinicbookingtfstate"
+container_name       = "tfstate"
+key                  = "staging.tfstate"
+use_azuread_auth     = true

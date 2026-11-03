@@ -42,3 +42,6 @@ reports/
 !.vscode/extensions.json
 .DS_Store
 Thumbs.db
+
+# Terraform : configuration locale du backend
+backend.hcl
