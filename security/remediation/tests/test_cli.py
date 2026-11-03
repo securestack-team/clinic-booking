@@ -138,7 +138,7 @@ class BoutEnBoutTest(unittest.TestCase):
             self.assertIn(expected, report["results"][0]["reason"])
             self.assertEqual(self.remote_branches(), ["main"])
             self.assertEqual(api.made("POST", "/pulls"), [])
-            self.assertIn("💬 Pas de correctif sûr", api.made("POST", "/issues/7/comments")[0][2]["body"])
+            self.assertIn("💬 Pas de PR", api.made("POST", "/issues/7/comments")[0][2]["body"])
             self.assert_local_repo_untouched()
 
     def test_dependance_transitive_commentee(self):
@@ -170,6 +170,17 @@ class BoutEnBoutTest(unittest.TestCase):
     def test_pr_non_creee_la_branche_est_retiree(self):
         _, _, report = self.run_cli(NEWTONSOFT, args=["--apply"], api=FakeGitHub(fail_create=True))
         self.assertEqual(report["results"][0]["status"], "failed")
+        self.assertIn("GitHub a refusé la PR (HTTP 422)", report["results"][0]["reason"])
+        self.assertNotIn("AUTOFIX_TOKEN", report["results"][0]["reason"])
+        self.assertEqual(self.remote_branches(), ["main"])
+
+    def test_pr_refusee_faute_de_droits_explique_quoi_faire(self):
+        # Cas vu sur la PR #18 : GitHub Actions n'a pas le droit de créer des PR.
+        _, _, report = self.run_cli(NEWTONSOFT, args=["--apply"], api=FakeGitHub(fail_create="HTTP 403"))
+        reason = report["results"][0]["reason"]
+        self.assertIn("HTTP 403", reason)
+        self.assertIn("Allow GitHub Actions to create and approve pull requests", reason)
+        self.assertIn("AUTOFIX_TOKEN", reason)
         self.assertEqual(self.remote_branches(), ["main"])
 
     def test_ne_se_corrige_pas_elle_meme(self):
