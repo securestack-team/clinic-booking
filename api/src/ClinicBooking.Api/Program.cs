@@ -73,6 +73,14 @@ if (builder.Environment.IsDevelopment())
 
 var app = builder.Build();
 
+// Environnement local (docker-compose) : crée ou met à jour les tables au démarrage.
+// Désactivé par défaut : en production, les migrations sont appliquées par la pipeline.
+if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
+{
+    using var scope = app.Services.CreateScope();
+    scope.ServiceProvider.GetRequiredService<ClinicBookingDbContext>().Database.Migrate();
+}
+
 app.UseExceptionHandler();
 app.UseAuthentication();
 app.UseAuthorization();
