@@ -67,6 +67,7 @@ public sealed class EndpointsTests : IClassFixture<TestApplicationFactory>
     }
 }
 
+
 public sealed class TestApplicationFactory : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
