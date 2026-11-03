@@ -93,8 +93,8 @@ Depuis la racine du dépôt, après avoir relu et compris le code :
 
 ```bash
 git add api
-git commit -m "feat: add API skeleton with integration tests"
-git push -u origin feature/api-skeleton
+git commit -m "feat: add PostgreSQL and JWT authentication"
+git push -u origin feature/postgresql-jwt-auth
 ```
 
 Ouvrir une PR vers `main`, faire valider par un membre de l'équipe et vérifier
