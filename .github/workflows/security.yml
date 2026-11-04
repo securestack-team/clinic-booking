@@ -110,6 +110,53 @@ jobs:
           name: sarif-semgrep
           path: reports/semgrep.sarif
 
+  checkov:
+    name: Checkov (IaC)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Scanner Terraform et Kubernetes
+        run: |
+          mkdir -p reports
+          docker run --rm --entrypoint checkov -v "$PWD:/repo:ro" -v "$PWD/reports:/out" -w /repo bridgecrew/checkov:3.2.495 \
+            -d infra --framework terraform kubernetes --output sarif --output-file-path /out --soft-fail
+          mv reports/results_sarif.sarif reports/checkov.sarif
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: reports/checkov.sarif
+          category: checkov
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sarif-checkov
+          path: reports/checkov.sarif
+
+  hadolint:
+    name: Hadolint (Dockerfile)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Analyser le Dockerfile
+        run: |
+          mkdir -p reports
+          docker run --rm -v "$PWD:/repo:ro" -w /repo hadolint/hadolint:v2.12.0 \
+            hadolint --no-fail --format sarif api/Dockerfile > reports/hadolint.sarif
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: reports/hadolint.sarif
+          category: hadolint
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sarif-hadolint
+          path: reports/hadolint.sarif
+
   codeql:
     name: CodeQL (${{ matrix.language }})
     needs: detect
@@ -150,7 +197,7 @@ jobs:
 
   ai-triage:
     name: AI Security Agent
-    needs: [gitleaks, trivy, semgrep, codeql]
+    needs: [gitleaks, trivy, semgrep, checkov, hadolint, codeql]
     # Le rapport reste utile lorsque le quality gate d'un scanner échoue.
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
