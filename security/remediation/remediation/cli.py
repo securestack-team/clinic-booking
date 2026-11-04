@@ -64,7 +64,16 @@ def main(argv: list[str] | None = None, env: dict | None = None, run_tool=fixers
     parser.add_argument("--max-prs", type=int, default=guardrails.DEFAULT_MAX_PRS, help="nombre maximum de PR par exécution")
     parser.add_argument("--apply", action="store_true", help="créer réellement les branches et les PR (sinon : simulation)")
     parser.add_argument("--no-llm", action="store_true", help="v1 seulement : ne demander aucun patch de code au LLM")
+    parser.add_argument("--sandbox-tools", action="store_true", help="isoler dotnet/npm dans Docker, sans identifiants du runner")
     args = parser.parse_args(argv)
+
+    if args.apply and env.get("GITHUB_ACTIONS") == "true" and not args.sandbox_tools:
+        log("GitHub Actions impose --sandbox-tools pour toute publication")
+        return 2
+
+    if args.sandbox_tools:
+        from .sandbox import run_tool as isolated_run_tool
+        run_tool = isolated_run_tool
 
     try:
         triage = load_triage(Path(args.triage))

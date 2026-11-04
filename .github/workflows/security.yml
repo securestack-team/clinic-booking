@@ -239,3 +239,83 @@ jobs:
             reports/triage.json
             reports/triage.md
           if-no-files-found: warn
+
+  remediation-tests:
+    name: Remediation tests (read-only)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # Les nouveaux tests de la PR sont exécutés sans secrets ni droits de publication.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Tests des correctifs et de l'isolation
+        working-directory: security/remediation
+        env:
+          RUN_SANDBOX_DOCKER_TESTS: "1"
+        run: python3 -m unittest
+
+  auto-remediation:
+    name: Auto-remediation
+    needs: [ai-triage, remediation-tests]
+    # Ni secrets ni correctifs automatiques sur les forks ou les PR du bot.
+    if: >-
+      always() && github.event_name == 'pull_request'
+      && needs.ai-triage.result == 'success'
+      && needs.remediation-tests.result == 'success'
+      && !startsWith(github.head_ref, 'autofix/')
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      # Comme pour l'agent : le code du bot vient de la base approuvée, jamais de la PR.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      # Le code de la PR est le dépôt à corriger : le bot y crée sa branche autofix/ et la pousse.
+      # Les PR de forks sont exclues plus haut, donc seul un membre de l'équipe peut déclencher ce job.
+      - name: Récupérer la branche de la PR à corriger
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr-source
+          fetch-depth: 0
+          token: ${{ secrets.AUTOFIX_TOKEN || github.token }}
+      - name: Vérifier que l'isolation est déjà dans la base approuvée
+        id: sandbox
+        run: |
+          if test -f security/remediation/remediation/sandbox.py; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Publication désactivée : fusionner d'abord le bac à sable dans main. Aucun outil de la PR ne sera exécuté sur l'hôte."
+          fi
+      - name: Télécharger le triage
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: triage
+          path: reports
+      - name: Tests de la remédiation
+        working-directory: security/remediation
+        run: python3 -m unittest
+      - name: Proposer les correctifs
+        if: steps.sandbox.outputs.ready == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          AUTOFIX_TOKEN: ${{ secrets.AUTOFIX_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PYTHONPATH: security/remediation
+        run: python3 -m remediation --triage reports/triage.json --repo-root pr-source --output reports --apply --sandbox-tools
+      - name: Publier le rapport de remédiation
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: remediation
+          path: |
+            reports/remediation.json
+            reports/remediation.md
+          if-no-files-found: warn
