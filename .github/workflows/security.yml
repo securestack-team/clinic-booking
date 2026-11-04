@@ -253,8 +253,18 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      # Comme pour l'agent : le code du bot vient de la base approuvée, jamais de la PR.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      # Le code de la PR est le dépôt à corriger : le bot y crée sa branche autofix/ et la pousse.
+      # Les PR de forks sont exclues plus haut, donc seul un membre de l'équipe peut déclencher ce job.
+      - name: Récupérer la branche de la PR à corriger
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr-source
           fetch-depth: 0
           token: ${{ secrets.AUTOFIX_TOKEN || github.token }}
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -274,7 +284,7 @@ jobs:
           AUTOFIX_TOKEN: ${{ secrets.AUTOFIX_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PYTHONPATH: security/remediation
-        run: python3 -m remediation --triage reports/triage.json --output reports --apply
+        run: python3 -m remediation --triage reports/triage.json --repo-root pr-source --output reports --apply
       - name: Publier le rapport de remédiation
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
