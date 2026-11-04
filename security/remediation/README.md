@@ -18,8 +18,8 @@ reports/triage.json ─► choisir ─► planifier ─► appliquer ─► vér
 **Elle ne merge jamais.** Une PR de correctif repasse par toute la pipeline et attend une
 approbation humaine.
 
-Python 3.10+ et bibliothèque standard uniquement. Git est requis ; `dotnet` et `npm` seulement
-pour les correctifs correspondants.
+Python 3.10+ et bibliothèque standard uniquement. Git est requis. En CI, Docker exécute
+`dotnet` et `npm` dans des conteneurs isolés ; les outils n'ont pas à être installés sur l'hôte.
 
 ## Utilisation
 
@@ -34,7 +34,7 @@ python3 -m remediation --triage ../../reports/triage.json --repo-root ../.. --ou
 # Réel : crée les branches et les PR
 export GITHUB_REPOSITORY=securestack-team/clinic-booking
 export GITHUB_TOKEN=...            # jamais dans le repo
-python3 -m remediation --triage ../../reports/triage.json --repo-root ../.. --base ma-branche --apply
+python3 -m remediation --triage ../../reports/triage.json --repo-root ../.. --base ma-branche --apply --sandbox-tools
 ```
 
 | Option | Rôle |
@@ -46,6 +46,7 @@ python3 -m remediation --triage ../../reports/triage.json --repo-root ../.. --ba
 | `--max-prs` | Nombre maximum de PR par exécution (défaut : 3, plafond : 10) |
 | `--apply` | Crée réellement les branches et les PR. Sans cette option : simulation |
 | `--no-llm` | v1 seulement : ne demande aucun patch de code au LLM |
+| `--sandbox-tools` | Obligatoire dans le job CI : exécute les outils dans Docker, sans identifiants du runner ; aucun repli sur l'hôte |
 
 | Variable | Rôle |
 |---|---|
@@ -138,50 +139,47 @@ Les correctifs v1 passent avant les patchs v2, et la limite de PR par exécution
 
 ## Intégration dans la pipeline
 
-Job à ajouter dans `.github/workflows/security.yml` (module CI/CD), après le job `ai-triage` :
+Le job se trouve dans [security.yml](../../.github/workflows/security.yml).
+Il conserve le code du bot au commit de base approuvé et traite `pr-source/` comme
+le dépôt à corriger. Les tests du nouveau code de la PR tournent séparément dans
+`remediation-tests`, avec `contents: read`, sans secrets ni credentials persistés.
 
-```yaml
-  auto-remediation:
-    name: Auto-remediation
-    needs: ai-triage
-    # Pas sur une PR du bot (pas de boucle) ni sur un fork (pas de secrets)
-    if: >-
-      always() && github.event_name == 'pull_request'
-      && !startsWith(github.head_ref, 'autofix/')
-      && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.AUTOFIX_TOKEN || github.token }}
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          dotnet-version: 10.0.x
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: triage
-          path: reports
-      - name: Tests de la remédiation
-        working-directory: security/remediation
-        run: python3 -m unittest
-      - name: Remédiation
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          AUTOFIX_TOKEN: ${{ secrets.AUTOFIX_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }} # optionnel : active la v2
-          PYTHONPATH: security/remediation
-        run: python3 -m remediation --triage reports/triage.json --output reports --apply
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: remediation
-          path: |
-            reports/remediation.json
-            reports/remediation.md
+Le job privilégié attend le succès du triage et des tests de remédiation. Il refuse
+les forks et les branches `autofix/`. La publication utilise `--sandbox-tools` :
+
+- `dotnet` et `npm` sont lancés dans des conteneurs sans les variables ou fichiers
+  d'identification du runner, sans `.git`, sans socket Docker ni espace PID de l'hôte ;
+- seule une copie du dépôt de travail est montée, avec un utilisateur non-root sur
+  les runners Ubuntu, rootfs en lecture seule, capabilities retirées et ressources limitées ;
+- seuls les changements de dépendances autorisés reviennent après validation complète ;
+  liens, fichiers spéciaux, suppressions et modifications hors périmètre sont refusés ;
+- les caches/builds sont jetables ; le réseau du conteneur reste nécessaire pour les
+  paquets publics, mais aucun secret de feed privé ne lui est transmis ;
+- Docker absent, timeout ou échec de contrôle : pas de PR et jamais de build sur l'hôte.
+
+Le bot peut toujours utiliser Gemini sur l'hôte pour préparer un patch, puis compiler
+ce patch dans le conteneur. Les secrets Gemini et GitHub ne sont pas transmis au build.
+Cela ne prouve pas qu'un patch est correct : scans et revue humaine restent nécessaires.
+
+**Première intégration :** tant que `sandbox.py` n'existe pas dans le commit de base
+approuvé, le job émet une notice et ne publie aucun correctif. Il ne récupère jamais ce
+module depuis la PR pour l'exécuter avec des secrets. Les tests du module proposé
+peuvent quand même passer dans le job en lecture seule. Après la fusion, une nouvelle
+PR basée sur cette version de `main` peut utiliser le bot isolé.
+
+### Vérifier l'isolation
+
+```bash
+cd security/remediation
+python3 -m unittest
+# Test Docker réel avec une image de sonde locale construite depuis Alpine :
+RUN_SANDBOX_DOCKER_TESTS=1 python3 -m unittest tests.test_sandbox.DockerBoundaryTest -v
 ```
+
+Le test Docker utilise uniquement de faux marqueurs et vérifie qu'un processus de
+build ne voit ni les credentials du runner, ni `.git`, ni le socket Docker ; il vérifie
+également le retour d'un lockfile. Les tests unitaires couvrent le refus des fichiers
+hors périmètre/liens et l'absence de PR lorsqu'un outil isolé échoue.
 
 ### Le token : point important
 
@@ -199,11 +197,13 @@ and approve pull requests ».
 
 ## Limites connues
 
-- Jamais exécutée dans GitHub Actions : le job n'existe pas encore. La création réelle d'une
-  PR est testée avec une API GitHub simulée.
-- `dotnet restore` évalue le fichier de projet de la PR, qui peut contenir du code. Les tokens
-  sont retirés de l'environnement de l'outil, mais le job ne doit tourner que sur les PR des
-  membres de l'équipe (condition `if` ci-dessus).
+- La création de PR est couverte avec une API simulée ; la preuve d'une vraie PR du bot
+  et de la relance de ses checks reste à garder après l'intégration du job.
+- `--sandbox-tools` est requis dans la CI privilégiée. Sans cette option, les outils sont
+  lancés sur l'hôte : ce mode local historique ne convient pas à des projets non fiables
+  lorsqu'un token ou un autre secret est accessible sur la machine.
+- Docker et les images officielles SDK .NET / Node doivent être disponibles. Les caches
+  de paquets ne sont pas partagés avec l'hôte et un dépôt contenant des liens est refusé.
 - La v2 n'a jamais reçu de vraie réponse de Gemini (pas de clé) : le LLM est simulé dans les
   tests. La qualité réelle de ses patchs sur le code de l'API reste à mesurer.
 - Un patch v2 ne peut pas ajouter de directive `using` en haut du fichier : le LLM doit écrire

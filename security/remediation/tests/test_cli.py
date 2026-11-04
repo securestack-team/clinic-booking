@@ -3,6 +3,7 @@ import io
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from .helpers import LODASH, NEWTONSOFT, FakeGitHub, FakeTools, finding, git, make_repo, write_triage
@@ -54,6 +55,28 @@ class BoutEnBoutTest(unittest.TestCase):
         self.assertIn("simulation", (self.tmp / "out" / "remediation.md").read_text(encoding="utf-8"))
 
     # --- Cas nominal --------------------------------------------------------------------
+
+    def test_sandbox_tools_routes_restore_to_isolated_runner_and_still_opens_pr(self):
+        with patch("remediation.sandbox.run_tool", side_effect=self.tools) as isolated:
+            _, _, report = self.run_cli(NEWTONSOFT, args=["--apply", "--sandbox-tools"])
+        self.assertEqual(report["results"][0]["status"], "opened")
+        self.assertTrue(isolated.called)
+        self.assertEqual(isolated.call_args.args[0][:2], ["dotnet", "restore"])
+
+    def test_sandbox_failure_never_publishes_an_unvalidated_patch(self):
+        from remediation.fixers import CannotFix
+        with patch("remediation.sandbox.run_tool", side_effect=CannotFix("Docker indisponible")):
+            _, _, report = self.run_cli(NEWTONSOFT, args=["--apply", "--sandbox-tools"])
+        self.assertEqual(report["results"][0]["status"], "failed")
+        self.assertEqual(self.api.made("POST", "/pulls"), [])
+        self.assertEqual(self.remote_branches(), ["main"])
+
+    def test_github_actions_refuses_apply_without_sandbox(self):
+        code, logs, _ = self.run_cli(NEWTONSOFT, args=["--apply"], env={**ENV, "GITHUB_ACTIONS": "true"})
+        self.assertEqual(code, 2)
+        self.assertIn("--sandbox-tools", logs)
+        self.assertEqual(self.api.calls, [])
+        self.assertEqual(self.tools.commands, [])
 
     def test_ouvre_une_pr_de_correctif_nuget(self):
         code, logs, report = self.run_cli(NEWTONSOFT, args=["--apply"])
