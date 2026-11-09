@@ -46,7 +46,7 @@ jobs:
             git . --redact --report-format sarif --report-path reports/gitleaks.sarif
       - name: Upload SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: reports/gitleaks.sarif
           category: gitleaks
@@ -71,7 +71,7 @@ jobs:
             fs --scanners vuln,misconfig,secret --format sarif --output reports/trivy.sarif .
       - name: Upload SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: reports/trivy.sarif
           category: trivy
@@ -100,7 +100,7 @@ jobs:
             semgrep --config auto --sarif --output /src/reports/semgrep.sarif
       - name: Upload SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: reports/semgrep.sarif
           category: semgrep
@@ -125,7 +125,7 @@ jobs:
             -d infra --framework terraform kubernetes --output sarif --output-file-path /out --soft-fail
           mv reports/results_sarif.sarif reports/checkov.sarif
       - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: reports/checkov.sarif
           category: checkov
@@ -148,7 +148,7 @@ jobs:
           docker run --rm -v "$PWD:/repo:ro" -w /repo hadolint/hadolint:v2.12.0 \
             hadolint --no-fail --format sarif api/Dockerfile > reports/hadolint.sarif
       - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: reports/hadolint.sarif
           category: hadolint
@@ -178,13 +178,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: matrix.enabled
-      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         if: matrix.enabled
         with:
           languages: ${{ matrix.language }}
           build-mode: none
           queries: security-extended
-      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         if: matrix.enabled
         with:
           category: codeql-${{ matrix.language }}
@@ -232,7 +232,7 @@ jobs:
         run: python3 -m triage --input reports --output reports --source-root pr-source --comment
       - name: Publier le rapport de triage
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: triage
           path: |
